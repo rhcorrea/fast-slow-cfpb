@@ -35,14 +35,20 @@ QUESTIONS = {
     }
 }
 
+MODEL = "convaiinnovations/laya"
 PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
+
+
+def classify(agent, narrative: str) -> dict:
+    """Laya's answer: 'choice', 'confidence' and per-label 'probabilities'."""
+    return agent.system_one(narrative, QUESTIONS)["answers"]["product"]
 
 
 def run_split(name: str, agent) -> Path:
     df = pd.read_parquet(PROCESSED_DIR / f"{name}.parquet")
     preds, confs, probs = [], [], []
     for narrative in df["narrative"]:
-        ans = agent.system_one(narrative, QUESTIONS)["answers"]["product"]
+        ans = classify(agent, narrative)
         preds.append(ans["choice"])
         confs.append(ans["confidence"])
         probs.append(ans["probabilities"])
@@ -61,6 +67,6 @@ def run_split(name: str, agent) -> Path:
 
 
 if __name__ == "__main__":
-    agent = load("convaiinnovations/laya")
+    agent = load(MODEL)
     for split_name in ("val", "test"):
         run_split(split_name, agent)
