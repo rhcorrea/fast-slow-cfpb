@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 
 from .download import EXPORTS, RAW_DIR
-from .taxonomy import CANONICAL_PRODUCT
+from .taxonomy import canonicalize
 
 PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
 OUT_PATH = PROCESSED_DIR / "complaints_with_narrative.parquet"
@@ -63,7 +63,7 @@ def preprocess() -> Path:
         parts.extend(_filtered_rows(zip_path))
 
     df = pd.concat(parts, ignore_index=True)
-    df["canonical_product"] = df["product"].map(CANONICAL_PRODUCT)
+    df["canonical_product"] = canonicalize(df)
     assert df["canonical_product"].notna().all(), "unmapped product label -- update taxonomy.py"
 
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
