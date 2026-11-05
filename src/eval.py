@@ -22,12 +22,17 @@ GRID = np.round(np.arange(0, 1.0001, 0.01), 2)
 MIXES = ("real", "balanced")
 
 
-def load(split: str) -> pd.DataFrame:
+def load(split: str, slow: str = "sol") -> pd.DataFrame:
+    """Laya's predictions joined with the slow system's: Sol, or a local model from src/models/slm.py."""
     s1 = pd.read_parquet(
         PROCESSED_DIR / f"{split}_system1.parquet",
         columns=["complaint_id", "canonical_product", "system1_pred", "system1_confidence"],
     )
-    s2 = pd.read_parquet(PROCESSED_DIR / f"{split}_system2.parquet", columns=["complaint_id", "system2_pred"])
+    if slow == "sol":
+        s2 = pd.read_parquet(PROCESSED_DIR / f"{split}_system2.parquet", columns=["complaint_id", "system2_pred"])
+    else:
+        s2 = pd.read_parquet(PROCESSED_DIR / f"{split}_{slow}.parquet", columns=["complaint_id", "slm_pred"])
+        s2 = s2.rename(columns={"slm_pred": "system2_pred"})
     return s1.merge(s2, on="complaint_id", validate="1:1")
 
 
@@ -91,31 +96,32 @@ def sweep(df: pd.DataFrame, w=None) -> list[dict]:
              "accuracy": accuracy(df["canonical_product"], apply(df, t), w)} for t in GRID]
 
 
-def main(target: float, mix: str) -> dict:
+def main(target: float, mix: str, slow: str = "sol") -> dict:
     shares = pd.read_parquet(OUT_PATH, columns=["canonical_product"])["canonical_product"]
     shares = shares[shares.isin(LABELS)].value_counts(normalize=True)
 
-    frames = {split: load(split) for split in ("val", "test")}
+    frames = {split: load(split, slow) for split in ("val", "test")}
     weights = {split: {"real": real_mix_weights(df["canonical_product"], shares), "balanced": None}
                for split, df in frames.items()}
 
     t = choose_threshold(frames["val"], weights["val"][mix], target)
     results = {
         "threshold": t,
+        "slow": slow,
         "picked_on": {"split": "val", "mix": mix, "target": target},
         **{split: {m: report(df, t, weights[split][m]) for m in MIXES} for split, df in frames.items()},
         "sweep": {split: {m: sweep(df, weights[split][m]) for m in MIXES} for split, df in frames.items()},
     }
-    out = PROCESSED_DIR / "eval.json"
+    out = PROCESSED_DIR / ("eval.json" if slow == "sol" else f"eval_{slow}.json")
     out.write_text(json.dumps(results, indent=2))
 
-    print(f"threshold {t:.2f}: lowest reaching {target:.0%} of Sol's val accuracy, {mix} mix\n")
-    print(f"{'':14}{'laya':>8}{'sol':>8}{'router':>8}{'to sol':>8}{'perfect':>9}   laya ECE")
+    print(f"threshold {t:.2f}: lowest reaching {target:.0%} of {slow}'s val accuracy, {mix} mix\n")
+    print(f"{'':14}{'laya':>8}{'slow':>8}{'router':>8}{'to slow':>9}{'perfect':>9}   laya ECE")
     for split in ("val", "test"):
         for m in MIXES:
             r = results[split][m]
             print(f"{split + ' ' + m:14}{r['laya']['accuracy']:8.1%}{r['sol']['accuracy']:8.1%}"
-                  f"{r['router']['accuracy']:8.1%}{r['router']['sent_to_sol']:8.1%}"
+                  f"{r['router']['accuracy']:8.1%}{r['router']['sent_to_sol']:9.1%}"
                   f"{r['perfect_router']['accuracy']:9.1%}   {r['laya']['ece']:.3f}")
     print(f"\nfull results, macro-F1 and threshold sweep -> {out}", file=sys.stderr)
     return results
@@ -125,5 +131,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--target", type=float, default=0.97, help="share of Sol-alone accuracy to reach on val")
     parser.add_argument("--mix", choices=MIXES, default="real", help="class mix used to pick the threshold")
+    parser.add_argument("--slow", default="sol", help='slow system: "sol" or a model folder name run by src/models/slm.py')
     args = parser.parse_args()
-    main(args.target, args.mix)
+    main(args.target, args.mix, args.slow)
