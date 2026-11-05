@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 import pandas as pd
-from laya import load
 
 from ..data.taxonomy import LABELS
 
@@ -35,7 +34,9 @@ QUESTIONS = {
     }
 }
 
-MODEL = "convaiinnovations/laya"
+MODELS_DIR = Path(__file__).resolve().parents[2] / "models"
+# Local copy on the project drive if present, else download from the Hub (into ~/.cache).
+MODEL = str(MODELS_DIR / "laya") if (MODELS_DIR / "laya").exists() else "convaiinnovations/laya"
 PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
 
 
@@ -67,6 +68,8 @@ def run_split(name: str, agent) -> Path:
 
 
 if __name__ == "__main__":
+    from laya import load  # here, not at import: slm.py and system2.py import CRITERIA without needing torch
+
     agent = load(MODEL)
     for split_name in ("val", "test"):
         run_split(split_name, agent)

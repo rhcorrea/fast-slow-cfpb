@@ -19,3 +19,6 @@ wheels/
 # Data (reproducible via src/data/download.py + preprocess.py, not redistributed)
 data/raw/
 data/processed/
+
+# Model weights (downloaded, not redistributed)
+/models/
