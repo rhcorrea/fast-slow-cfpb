@@ -1,16 +1,22 @@
-"""Fast/slow router: keep Laya's label when it's confident, otherwise ask Sol.
+"""Fast/slow router: keep the fast system's label when it's confident, otherwise ask Sol.
 
 `apply` routes saved System 1/System 2 predictions (what src/eval.py sweeps).
-`Router` does the same live, calling Sol only for complaints that need it.
+`Router` does the same live, calling Sol only for complaints that need it. The fast
+system is Laya or a local model run by src/models/slm.py:
+
+    python -m src.router "narrative..."                          # Laya -> Sol
+    python -m src.router --fast qwen3.5-4b-4bit "narrative..."   # Qwen -> Sol
 """
-import sys
+import argparse
 
 import numpy as np
 import pandas as pd
 
-# Lowest threshold reaching 97% of Sol's val accuracy on the real class mix; rerun
-# `python -m src.eval` to re-pick it after the taxonomy or either model changes.
-THRESHOLD = 0.41
+# Per fast system: the lowest threshold reaching 97% of Sol's val accuracy on the real
+# class mix. Rerun `python -m src.eval [--fast NAME]` to re-pick after the taxonomy or
+# a model changes.
+THRESHOLDS = {"laya": 0.41, "qwen3.5-4b-4bit": 0.84}
+THRESHOLD = THRESHOLDS["laya"]
 
 
 def escalate(confidence, threshold: float = THRESHOLD) -> np.ndarray:
@@ -23,26 +29,44 @@ def apply(df: pd.DataFrame, threshold: float = THRESHOLD) -> pd.Series:
 
 
 class Router:
-    def __init__(self, threshold: float = THRESHOLD):
-        from laya import load
+    def __init__(self, fast: str = "laya", threshold: float | None = None):
         from openai import OpenAI
 
-        from .models import system1
+        from .models import system2  # loads .env, so OpenAI() finds the key
 
-        self.agent = load(system1.MODEL)
+        if threshold is None:
+            assert fast in THRESHOLDS, f"no threshold picked for {fast}: run python -m src.eval --fast {fast}"
+            threshold = THRESHOLDS[fast]
+        if fast == "laya":
+            from laya import load
+
+            from .models import system1
+
+            agent = load(system1.MODEL)
+            self.fast = lambda text: system1.classify(agent, text)
+        else:
+            from .models import slm
+
+            model = slm.load_model(fast)
+            self.fast = lambda text: slm.classify(model, text)
         self.client = OpenAI()
         self.threshold = threshold
 
     def classify(self, narrative: str) -> dict:
-        from .models import system1, system2
+        from .models import system2
 
-        ans = system1.classify(self.agent, narrative)
+        ans = self.fast(narrative)
         if not escalate(ans["confidence"], self.threshold):
             return {"label": ans["choice"], "system": 1, "confidence": ans["confidence"]}
         return {"label": system2.classify(self.client, narrative), "system": 2, "confidence": ans["confidence"]}
 
 
 if __name__ == "__main__":
-    router = Router()
-    for text in sys.argv[1:]:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--fast", default="laya", help='"laya" or a model folder name run by src/models/slm.py')
+    parser.add_argument("--threshold", type=float, help="override the picked threshold")
+    parser.add_argument("narratives", nargs="+")
+    args = parser.parse_args()
+    router = Router(args.fast, args.threshold)
+    for text in args.narratives:
         print(router.classify(text))
