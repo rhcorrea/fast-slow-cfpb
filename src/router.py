@@ -2,9 +2,11 @@
 
 `apply` routes saved System 1/System 2 predictions (what src/eval.py sweeps).
 `Router` does the same live, calling Sol only for complaints that need it. The fast
-system is Laya or a local model run by src/models/slm.py:
+system is Laya, the supervised TF-IDF model (src/models/tfidf.py) or a local model run
+by src/models/slm.py:
 
     python -m src.router "narrative..."                          # Laya -> Sol
+    python -m src.router --fast tfidf "narrative..."             # TF-IDF -> Sol
     python -m src.router --fast qwen3.5-4b-4bit "narrative..."   # Qwen -> Sol
 """
 import argparse
@@ -14,8 +16,10 @@ import pandas as pd
 
 # Per fast system: the lowest threshold reaching 97% of Sol's val accuracy on the real
 # class mix. Rerun `python -m src.eval [--fast NAME]` to re-pick after the taxonomy or
-# a model changes.
-THRESHOLDS = {"laya": 0.41, "qwen3.5-4b-4bit": 0.84}
+# a model changes. TF-IDF alone already beats Sol on val, which makes that rule pick 0
+# (never ask Sol), so its threshold is the one maximizing val real-mix routed accuracy
+# (the sweep in eval_tfidf_to_sol.json): 0.61, sending ~10% to Sol.
+THRESHOLDS = {"laya": 0.41, "qwen3.5-4b-4bit": 0.84, "tfidf": 0.61}
 THRESHOLD = THRESHOLDS["laya"]
 
 
@@ -44,6 +48,11 @@ class Router:
 
             agent = load(system1.MODEL)
             self.fast = lambda text: system1.classify(agent, text)
+        elif fast in ("tfidf", "tfidf-balanced"):
+            from .models import tfidf
+
+            model = tfidf.load_model()
+            self.fast = lambda text: tfidf.classify(model, text, real_prior=fast == "tfidf")
         else:
             from .models import slm
 
