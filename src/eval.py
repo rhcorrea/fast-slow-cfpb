@@ -1,7 +1,8 @@
-"""Evaluate Laya, Sol and the router on saved val/test predictions.
+"""Evaluate a fast system, a slow system and the router on saved val/test predictions.
 
+Defaults to Laya -> Sol; --fast / --slow swap in a local model run by src/models/slm.py.
 The threshold is picked on val -- the lowest one whose routed accuracy reaches
-`target` x Sol-alone accuracy -- and test is reported once at that threshold.
+`target` x slow-alone accuracy -- and test is reported once at that threshold.
 Every metric comes in two class mixes: "balanced" (the 200/class eval sets as-is)
 and "real" (reweighted to each class's share of the full narrative dataset).
 """
@@ -22,18 +23,27 @@ GRID = np.round(np.arange(0, 1.0001, 0.01), 2)
 MIXES = ("real", "balanced")
 
 
-def load(split: str, slow: str = "sol") -> pd.DataFrame:
-    """Laya's predictions joined with the slow system's: Sol, or a local model from src/models/slm.py."""
-    s1 = pd.read_parquet(
-        PROCESSED_DIR / f"{split}_system1.parquet",
-        columns=["complaint_id", "canonical_product", "system1_pred", "system1_confidence"],
-    )
-    if slow == "sol":
-        s2 = pd.read_parquet(PROCESSED_DIR / f"{split}_system2.parquet", columns=["complaint_id", "system2_pred"])
-    else:
-        s2 = pd.read_parquet(PROCESSED_DIR / f"{split}_{slow}.parquet", columns=["complaint_id", "slm_pred"])
-        s2 = s2.rename(columns={"slm_pred": "system2_pred"})
-    return s1.merge(s2, on="complaint_id", validate="1:1")
+# name -> (file suffix, prediction column, confidence column); any other name is a
+# local model folder run by src/models/slm.py.
+SAVED = {"laya": ("system1", "system1_pred", "system1_confidence"), "sol": ("system2", "system2_pred", None)}
+
+
+def predictions(split: str, name: str) -> pd.DataFrame:
+    """complaint_id, pred and (if the system reports one) confidence for one system."""
+    file, pred, conf = SAVED.get(name, (name, "slm_pred", "slm_confidence"))
+    cols = ["complaint_id", pred] + ([conf] if conf else [])
+    return pd.read_parquet(PROCESSED_DIR / f"{split}_{file}.parquet", columns=cols).rename(
+        columns={pred: "pred", conf: "confidence"})
+
+
+def load(split: str, fast: str = "laya", slow: str = "sol") -> pd.DataFrame:
+    """Labels joined with the fast system's predictions and confidence and the slow system's predictions."""
+    f = predictions(split, fast)
+    assert "confidence" in f, f"{fast} reports no confidence, so it can't be the fast system"
+    s = predictions(split, slow)[["complaint_id", "pred"]]
+    y = pd.read_parquet(PROCESSED_DIR / f"{split}.parquet", columns=["complaint_id", "canonical_product"])
+    return (y.merge(f.rename(columns={"pred": "system1_pred", "confidence": "system1_confidence"}), on="complaint_id", validate="1:1")
+             .merge(s.rename(columns={"pred": "system2_pred"}), on="complaint_id", validate="1:1"))
 
 
 def real_mix_weights(y: pd.Series, shares: pd.Series) -> np.ndarray:
@@ -78,59 +88,62 @@ def choose_threshold(df: pd.DataFrame, w=None, target: float = 0.97) -> float:
 def report(df: pd.DataFrame, threshold: float, w=None) -> dict:
     y, s1, s2 = df["canonical_product"], df["system1_pred"], df["system2_pred"]
     routed, sent = apply(df, threshold), escalate(df["system1_confidence"], threshold)
-    laya_right = (s1 == y).to_numpy()
+    fast_right = (s1 == y).to_numpy()
     return {
-        "laya": {"accuracy": accuracy(y, s1, w), "macro_f1": macro_f1(y, s1, w),
-                 "ece": ece(df["system1_confidence"], laya_right, w)},
-        "sol": {"accuracy": accuracy(y, s2, w), "macro_f1": macro_f1(y, s2, w)},
+        "fast": {"accuracy": accuracy(y, s1, w), "macro_f1": macro_f1(y, s1, w),
+                 "ece": ece(df["system1_confidence"], fast_right, w)},
+        "slow": {"accuracy": accuracy(y, s2, w), "macro_f1": macro_f1(y, s2, w)},
         "router": {"accuracy": accuracy(y, routed, w), "macro_f1": macro_f1(y, routed, w),
-                   "sent_to_sol": float(np.average(sent, weights=w))},
-        "perfect_router": {"accuracy": float(np.average(laya_right | (s2 == y).to_numpy(), weights=w)),
-                           "sent_to_sol": float(np.average(~laya_right, weights=w))},
+                   "sent_to_slow": float(np.average(sent, weights=w))},
+        "perfect_router": {"accuracy": float(np.average(fast_right | (s2 == y).to_numpy(), weights=w)),
+                           "sent_to_slow": float(np.average(~fast_right, weights=w))},
     }
 
 
 def sweep(df: pd.DataFrame, w=None) -> list[dict]:
     return [{"threshold": float(t),
-             "sent_to_sol": float(np.average(escalate(df["system1_confidence"], t), weights=w)),
+             "sent_to_slow": float(np.average(escalate(df["system1_confidence"], t), weights=w)),
              "accuracy": accuracy(df["canonical_product"], apply(df, t), w)} for t in GRID]
 
 
-def main(target: float, mix: str, slow: str = "sol") -> dict:
+def main(target: float, mix: str, fast: str = "laya", slow: str = "sol") -> dict:
     shares = pd.read_parquet(OUT_PATH, columns=["canonical_product"])["canonical_product"]
     shares = shares[shares.isin(LABELS)].value_counts(normalize=True)
 
-    frames = {split: load(split, slow) for split in ("val", "test")}
+    frames = {split: load(split, fast, slow) for split in ("val", "test")}
     weights = {split: {"real": real_mix_weights(df["canonical_product"], shares), "balanced": None}
                for split, df in frames.items()}
 
     t = choose_threshold(frames["val"], weights["val"][mix], target)
     results = {
         "threshold": t,
+        "fast": fast,
         "slow": slow,
         "picked_on": {"split": "val", "mix": mix, "target": target},
         **{split: {m: report(df, t, weights[split][m]) for m in MIXES} for split, df in frames.items()},
         "sweep": {split: {m: sweep(df, weights[split][m]) for m in MIXES} for split, df in frames.items()},
     }
-    out = PROCESSED_DIR / ("eval.json" if slow == "sol" else f"eval_{slow}.json")
+    default = (fast, slow) == ("laya", "sol")
+    out = PROCESSED_DIR / ("eval.json" if default else f"eval_{fast}_to_{slow}.json")
     out.write_text(json.dumps(results, indent=2))
 
-    print(f"threshold {t:.2f}: lowest reaching {target:.0%} of {slow}'s val accuracy, {mix} mix\n")
-    print(f"{'':14}{'laya':>8}{'slow':>8}{'router':>8}{'to slow':>9}{'perfect':>9}   laya ECE")
+    print(f"{fast} -> {slow}, threshold {t:.2f}: lowest reaching {target:.0%} of {slow}'s val accuracy, {mix} mix\n")
+    print(f"{'':14}{'fast':>8}{'slow':>8}{'router':>8}{'to slow':>9}{'perfect':>9}   fast ECE")
     for split in ("val", "test"):
         for m in MIXES:
             r = results[split][m]
-            print(f"{split + ' ' + m:14}{r['laya']['accuracy']:8.1%}{r['sol']['accuracy']:8.1%}"
-                  f"{r['router']['accuracy']:8.1%}{r['router']['sent_to_sol']:9.1%}"
-                  f"{r['perfect_router']['accuracy']:9.1%}   {r['laya']['ece']:.3f}")
+            print(f"{split + ' ' + m:14}{r['fast']['accuracy']:8.1%}{r['slow']['accuracy']:8.1%}"
+                  f"{r['router']['accuracy']:8.1%}{r['router']['sent_to_slow']:9.1%}"
+                  f"{r['perfect_router']['accuracy']:9.1%}   {r['fast']['ece']:.3f}")
     print(f"\nfull results, macro-F1 and threshold sweep -> {out}", file=sys.stderr)
     return results
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--target", type=float, default=0.97, help="share of Sol-alone accuracy to reach on val")
+    parser.add_argument("--target", type=float, default=0.97, help="share of slow-alone accuracy to reach on val")
     parser.add_argument("--mix", choices=MIXES, default="real", help="class mix used to pick the threshold")
-    parser.add_argument("--slow", default="sol", help='slow system: "sol" or a model folder name run by src/models/slm.py')
+    parser.add_argument("--fast", default="laya", help='fast system: "laya" or a model folder name run by src/models/slm.py')
+    parser.add_argument("--slow", default="sol", help='slow system: "sol", "laya" or a model folder name run by src/models/slm.py')
     args = parser.parse_args()
-    main(args.target, args.mix, args.slow)
+    main(args.target, args.mix, args.fast, args.slow)
