@@ -13,10 +13,12 @@ Runs are resumable: each answer is appended to data/processed/{split}_{model}.js
 import json
 import sys
 import time
+from typing import NamedTuple
 
 import mlx.core as mx
 import pandas as pd
 from mlx_lm import load
+from mlx_lm.models.cache import ArraysCache, KVCache, make_prompt_cache
 
 from ..data.taxonomy import LABELS
 from .system1 import CRITERIA, MODELS_DIR, PROCESSED_DIR
@@ -38,22 +40,62 @@ mx.set_cache_limit(512 * 2**20)
 MEMORY_LIMIT = 8 * 2**30
 
 
-def load_model(name: str):
-    """(model, tokenizer, digit token ids) for a model folder under models/."""
+SLOT = "\x00"  # stands in for the narrative while splitting the chat template
+
+
+class SLM(NamedTuple):
+    model: object
+    tokenizer: object
+    digits: list[int]
+    prefix: list  # model cache after the shared system prompt
+    tail: str     # template text after the narrative
+
+
+def prompt(tokenizer, narrative: str) -> str:
+    return tokenizer.apply_chat_template(
+        [{"role": "system", "content": INSTRUCTIONS}, {"role": "user", "content": narrative}],
+        tokenize=False, add_generation_prompt=True, enable_thinking=False,
+    )
+
+
+def fork(cache: list) -> list:
+    """Copy of a prompt cache that the next forward pass can extend without touching the original.
+
+    Qwen3.5 mixes attention layers (KVCache, written in place, so slice to new arrays)
+    with linear-attention layers (ArraysCache, whose entries are replaced, never written
+    into, so a new list is enough). Linear-attention state can't be trimmed back, hence
+    a copy per complaint rather than trim_prompt_cache.
+    """
+    out = []
+    for c in cache:
+        if isinstance(c, KVCache):
+            k, v, n = c.state
+            out.append(KVCache.from_state((k[..., :n, :], v[..., :n, :], n)))
+        else:
+            assert isinstance(c, ArraysCache), f"unhandled cache type {type(c).__name__}"
+            out.append(ArraysCache.from_state((list(c.cache), c.left_padding, c.lengths)))
+    return out
+
+
+def load_model(name: str) -> SLM:
+    """Model, tokenizer, digit ids and the system prompt already run, for a folder under models/."""
     model, tokenizer = load(str(MODELS_DIR / name))
     digits = [tokenizer.encode(str(i), add_special_tokens=False) for i in range(len(LABELS))]
     assert all(len(d) == 1 for d in digits), "each digit must be a single token"
-    return model, tokenizer, [d[0] for d in digits]
+    # The instructions are identical on every call: run them once and reuse the cache.
+    head, tail = prompt(tokenizer, SLOT).split(SLOT)
+    prefix = make_prompt_cache(model)
+    model(mx.array([tokenizer.encode(head, add_special_tokens=False)]), cache=prefix)
+    mx.eval([a for c in prefix for a in (c.state[:2] if isinstance(c, KVCache) else c.cache)])
+    return SLM(model, tokenizer, [d[0] for d in digits], prefix, tail)
 
 
-def classify(slm, narrative: str) -> dict:
-    model, tokenizer, digits = slm
-    text = tokenizer.apply_chat_template(
-        [{"role": "system", "content": INSTRUCTIONS}, {"role": "user", "content": narrative[:MAX_CHARS]}],
-        tokenize=False, add_generation_prompt=True, enable_thinking=False,
-    )
-    ids = tokenizer.encode(text, add_special_tokens=False)
-    probs = mx.softmax(model(mx.array([ids]))[0, -1, digits].astype(mx.float32)).tolist()
+def classify(slm: SLM, narrative: str) -> dict:
+    model, tokenizer, digits, prefix, tail = slm
+    # .strip() because the chat template strips message content; skipping it changes
+    # the tokens for narratives cut at MAX_CHARS mid-whitespace.
+    ids = tokenizer.encode(narrative[:MAX_CHARS].strip() + tail, add_special_tokens=False)
+    probs = mx.softmax(model(mx.array([ids]), cache=fork(prefix))[0, -1, digits].astype(mx.float32)).tolist()
     best = max(range(len(LABELS)), key=probs.__getitem__)
     return {"choice": LABELS[best], "confidence": probs[best], "probabilities": dict(zip(LABELS, probs))}
 
