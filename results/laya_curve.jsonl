@@ -1,0 +1,31 @@
+{"model": "tfidf", "n": 10, "seed": 0, "balanced": 0.4695, "real_raw": 0.6018883073222553, "real_prior": 0.6519688891164673, "issue_type": 0.44829545454545455}
+{"model": "tfidf", "n": 10, "seed": 1, "balanced": 0.4555, "real_raw": 0.665470979299353, "real_prior": 0.6519688891164673, "issue_type": 0.47045454545454546}
+{"model": "tfidf", "n": 10, "seed": 2, "balanced": 0.4345, "real_raw": 0.5438574589624698, "real_prior": 0.6525470209922827, "issue_type": 0.46136363636363636}
+{"model": "tfidf", "n": 10, "seed": 3, "balanced": 0.477, "real_raw": 0.5871357255571548, "real_prior": 0.6519688891164673, "issue_type": 0.45}
+{"model": "tfidf", "n": 10, "seed": 4, "balanced": 0.473, "real_raw": 0.6311052197778635, "real_prior": 0.653028512938132, "issue_type": 0.45852272727272725}
+{"model": "tfidf", "n": 50, "seed": 0, "balanced": 0.5995, "real_raw": 0.697132792309146, "real_prior": 0.6677588763567734, "issue_type": 0.5528409090909091}
+{"model": "tfidf", "n": 50, "seed": 1, "balanced": 0.605, "real_raw": 0.7240430099673251, "real_prior": 0.6630709378154023, "issue_type": 0.5568181818181818}
+{"model": "tfidf", "n": 50, "seed": 2, "balanced": 0.584, "real_raw": 0.6979785294563342, "real_prior": 0.6664890476912076, "issue_type": 0.5375}
+{"model": "tfidf", "n": 50, "seed": 3, "balanced": 0.6275, "real_raw": 0.7635094434470565, "real_prior": 0.6603998795509858, "issue_type": 0.5607954545454545}
+{"model": "tfidf", "n": 50, "seed": 4, "balanced": 0.615, "real_raw": 0.7087643397098878, "real_prior": 0.6638384896722899, "issue_type": 0.5636363636363636}
+{"model": "tfidf", "n": 100, "seed": 0, "balanced": 0.6665, "real_raw": 0.7342593256362758, "real_prior": 0.7360428378973044, "issue_type": 0.61875}
+{"model": "tfidf", "n": 100, "seed": 1, "balanced": 0.666, "real_raw": 0.7661508937114128, "real_prior": 0.7210226677559236, "issue_type": 0.6051136363636364}
+{"model": "tfidf", "n": 100, "seed": 2, "balanced": 0.662, "real_raw": 0.7425705064706907, "real_prior": 0.7444975945286932, "issue_type": 0.6119318181818182}
+{"model": "tfidf", "n": 100, "seed": 3, "balanced": 0.669, "real_raw": 0.7543923290041176, "real_prior": 0.726012764632385, "issue_type": 0.615909090909091}
+{"model": "tfidf", "n": 100, "seed": 4, "balanced": 0.6505, "real_raw": 0.7033262746502651, "real_prior": 0.7268139715138341, "issue_type": 0.5965909090909091}
+{"model": "tfidf", "n": 500, "seed": 0, "balanced": 0.7265, "real_raw": 0.800934367503615, "real_prior": 0.8456110422166778, "issue_type": 0.6704545454545454}
+{"model": "tfidf", "n": 500, "seed": 1, "balanced": 0.737, "real_raw": 0.8082241646091477, "real_prior": 0.8309207877479907, "issue_type": 0.675}
+{"model": "tfidf", "n": 500, "seed": 2, "balanced": 0.7295, "real_raw": 0.7978684722235581, "real_prior": 0.8401186061496577, "issue_type": 0.6630681818181818}
+{"model": "tfidf", "n": 500, "seed": 3, "balanced": 0.733, "real_raw": 0.7820048561694771, "real_prior": 0.8387860486043225, "issue_type": 0.6596590909090909}
+{"model": "tfidf", "n": 500, "seed": 4, "balanced": 0.7335, "real_raw": 0.7761463723246945, "real_prior": 0.8445567247537281, "issue_type": 0.6647727272727273}
+{"model": "laya-zs-multi", "n": 0, "epochs": 0, "grad_accum": 0, "multi": true, "s_per_complaint": 0.268, "balanced": 0.48, "real_raw": 0.7823484217774107, "real_prior": 0.7324643948918598, "issue_type": 0.41761363636363635}
+{"model": "laya-ft-n10", "n": 10, "epochs": 10, "grad_accum": 2, "multi": false, "train_min": 16.1, "updates": null, "s_per_complaint": 0.136, "balanced": 0.582, "real_raw": 0.6939719894959311, "real_prior": 0.7938179790298111}
+{"model": "laya-ft-n50", "n": 50, "epochs": 4, "grad_accum": 4, "multi": false, "train_min": 24.4, "updates": null, "s_per_complaint": 0.136, "balanced": 0.5925, "real_raw": 0.705033335317424, "real_prior": 0.7824891955882495}
+{"model": "laya-ft-n100", "n": 100, "epochs": 3, "grad_accum": 4, "multi": false, "train_min": 35.0, "updates": null, "s_per_complaint": 0.136, "balanced": 0.5985, "real_raw": 0.6927983263981145, "real_prior": 0.7780055836981591}
+{"model": "laya-ft-n50-multi", "n": 50, "epochs": 4, "grad_accum": 4, "multi": true, "train_min": 43.6, "updates": null, "s_per_complaint": 0.268, "balanced": 0.603, "real_raw": 0.716278589420917, "real_prior": 0.7836986476907919, "issue_type": 0.5073863636363637}
+{"model": "laya-zs", "n": 0, "epochs": 0, "grad_accum": 0, "multi": false, "s_per_complaint": 0.136, "balanced": 0.48, "real_raw": 0.7823484217774107, "real_prior": 0.7324643948918598}
+{"model": "t4-full-n50", "n": 50, "epochs": 4, "grad_accum": 4, "loss": "soft-ce", "multi": false, "device": "t4-full", "train_min": 4.6, "s_per_complaint": 0.0438, "balanced": 0.685, "real_raw": 0.6555474776796333, "real_prior": 0.8348221232660763, "ece_answer_prob": 0.06373245000000001, "auroc_answer_prob": 0.7733703849907216, "val_acc": 0.667}
+{"model": "t4-full-n500-1ep", "n": 500, "epochs": 1, "grad_accum": 8, "loss": "soft-ce", "multi": false, "device": "t4-full", "train_min": 13.2, "s_per_complaint": 0.0417, "balanced": 0.7165, "real_raw": 0.7738298536807001, "real_prior": 0.8677037450702069, "ece_answer_prob": 0.019697350000000027, "auroc_answer_prob": 0.8024808279518677, "val_acc": 0.698}
+{"model": "t4-full-n500-rlcd", "n": 500, "epochs": 4, "grad_accum": 8, "loss": "rlcd", "multi": false, "device": "t4-full", "train_min": 44.7, "s_per_complaint": 0.0418, "balanced": 0.736, "real_raw": 0.780967396110126, "real_prior": 0.8683838791184713, "ece_answer_prob": 0.04112674999999994, "auroc_answer_prob": 0.7954629086380105, "val_acc": 0.721}
+{"model": "t4-full-n500", "n": 500, "epochs": 4, "grad_accum": 8, "loss": "soft-ce", "multi": false, "device": "t4-full", "train_min": 44.6, "s_per_complaint": 0.0424, "balanced": 0.727, "real_raw": 0.7137905037102925, "real_prior": 0.846579249291251, "ece_answer_prob": 0.02212644999999995, "auroc_answer_prob": 0.791583531095223, "val_acc": 0.707}
+{"model": "t4-zs", "n": 0, "epochs": 0, "grad_accum": 0, "loss": null, "multi": false, "device": "t4-full", "train_min": null, "s_per_complaint": 0.0421, "balanced": 0.48, "real_raw": 0.7823484217774107, "real_prior": 0.7324643948918598, "ece_answer_prob": 0.0962752, "auroc_answer_prob": 0.7389908854166667, "val_acc": 0.4625}

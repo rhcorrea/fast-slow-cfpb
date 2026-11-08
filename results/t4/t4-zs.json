@@ -1,0 +1,1 @@
+{"model": "t4-zs", "train": null, "test_s_per_item": 0.0421, "test_acc": 0.48, "test_ece": 0.10271390000000001, "val_s_per_item": 0.0418, "val_acc": 0.4625, "val_ece": 0.09303385}

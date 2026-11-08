@@ -1,0 +1,1 @@
+{"model": "t4-full-n50", "train": "train_n50.jsonl", "epochs": 4, "grad_accum": 4, "loss": "soft-ce", "train_min": 4.6, "test_s_per_item": 0.0438, "test_acc": 0.6845, "test_ece": 0.23179230000000003, "val_s_per_item": 0.0439, "val_acc": 0.667, "val_ece": 0.20521024999999996}
