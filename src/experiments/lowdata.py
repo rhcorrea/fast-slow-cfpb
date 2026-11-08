@@ -94,7 +94,7 @@ def main(n: int, epochs: int, grad_accum: int, multi: bool) -> dict:
     prod = [a["product"] for a in ans]
     rec.update(product_scores(te["canonical_product"], [a["probabilities"] for a in prod], shares))
     te["pred"] = [a["choice"] for a in prod]
-    te["confidence"] = [a["confidence"] for a in prod]
+    te["confidence"] = [a["answer_confidence"] for a in prod]  # Laya's 'confidence' is entropy, not calibrated
     if multi:
         te["issue_pred"] = [a["issue_type"]["choice"] for a in ans]
         rec["issue_type"] = issue_score(te["issue_type"], te["issue_pred"])

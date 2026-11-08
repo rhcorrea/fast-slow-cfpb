@@ -18,8 +18,9 @@ import pandas as pd
 # class mix. Rerun `python -m src.eval [--fast NAME]` to re-pick after the taxonomy or
 # a model changes. TF-IDF alone already beats Sol on val, which makes that rule pick 0
 # (never ask Sol), so its threshold is the one maximizing val real-mix routed accuracy
-# (the sweep in eval_tfidf_to_sol.json): 0.61, sending ~10% to Sol.
-THRESHOLDS = {"laya": 0.41, "qwen3.5-4b-4bit": 0.84, "tfidf": 0.61}
+# (the sweep in eval_tfidf_to_sol.json): 0.61, sending ~10% to Sol. Laya's is on its
+# calibrated answer probability (see system1.classify); on its entropy score it was 0.41.
+THRESHOLDS = {"laya": 0.55, "qwen3.5-4b-4bit": 0.84, "tfidf": 0.61}
 THRESHOLD = THRESHOLDS["laya"]
 
 

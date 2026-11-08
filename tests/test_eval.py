@@ -33,7 +33,19 @@ def test_router():
     assert choose_threshold(df, target=1.0) == 0.21
 
 
+def test_system1_confidence_is_answer_probability():
+    from src.models import system1
+
+    class FakeAgent:  # Laya's choice answer: 'confidence' is entropy, 'answer_confidence' is max(p)
+        def system_one(self, text, questions):
+            return {"answers": {"product": {"choice": "a", "confidence": 0.3, "answer_confidence": 0.8,
+                                            "probabilities": {"a": 0.8, "b": 0.2}}}}
+
+    assert system1.classify(FakeAgent(), "text")["confidence"] == 0.8
+
+
 if __name__ == "__main__":
     test_metrics()
     test_router()
+    test_system1_confidence_is_answer_probability()
     print("ok")

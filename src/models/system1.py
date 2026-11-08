@@ -41,8 +41,13 @@ PROCESSED_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
 
 
 def classify(agent, narrative: str) -> dict:
-    """Laya's answer: 'choice', 'confidence' and per-label 'probabilities'."""
-    return agent.system_one(narrative, QUESTIONS)["answers"]["product"]
+    """Laya's answer: 'choice', 'confidence' and per-label 'probabilities'.
+
+    For `choice` questions Laya's own 'confidence' is normalized entropy, which temperature
+    scaling doesn't calibrate; 'answer_confidence' is the calibrated probability of the chosen
+    label. 'confidence' here is that one, so the router and ECE use the calibrated score."""
+    ans = agent.system_one(narrative, QUESTIONS)["answers"]["product"]
+    return {**ans, "confidence": ans["answer_confidence"]}
 
 
 def run_split(name: str, agent) -> Path:
