@@ -1,0 +1,949 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>fast-slow-cfpb</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+<style>
+/* Layout: one reading column, like a dispatch log. Blue is the fast lane (Laya), burnt orange the slow lane (Sol); every figure uses the same two colors. */
+:root {
+  --paper: #f4f6f9;
+  --surface: #ffffff;
+  --ink: #16202c;
+  --muted: #5a6678;
+  --rule: #d8dee7;
+  --grid: #e5e9ef;
+  --fast: #2a5bd7;
+  --fast-soft: #e0e8fb;
+  --slow: #c4501a;
+  --slow-soft: #f9e4d8;
+  --high: #b42318;
+  --high-soft: #fde8e5;
+  --med: #8a5a00;
+  --med-soft: #f9eed4;
+  --low: #3d5a80;
+  --low-soft: #e3eaf4;
+  --good: #1d7a4b;
+  --good-soft: #dcf1e5;
+  --local: #7a3fb0;
+  --local-soft: #efe5f8;
+  --display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --body: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f141b; --surface: #161d27; --ink: #e5eaf1; --muted: #9aa6b6; --rule: #283242; --grid: #1f2834;
+    --fast: #6b8ef0; --fast-soft: #1c2a48; --slow: #d8733c; --slow-soft: #3b2317;
+    --high: #ff8d7d; --high-soft: #3b1a17; --med: #f0c062; --med-soft: #33290f; --low: #a3bbdd; --low-soft: #1b2637;
+    --good: #72d4a2; --good-soft: #13302a; --local: #b58ae6; --local-soft: #2a1f3a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f141b; --surface: #161d27; --ink: #e5eaf1; --muted: #9aa6b6; --rule: #283242; --grid: #1f2834;
+  --fast: #6b8ef0; --fast-soft: #1c2a48; --slow: #d8733c; --slow-soft: #3b2317;
+  --high: #ff8d7d; --high-soft: #3b1a17; --med: #f0c062; --med-soft: #33290f; --low: #a3bbdd; --low-soft: #1b2637;
+  --good: #72d4a2; --good-soft: #13302a; --local: #b58ae6; --local-soft: #2a1f3a; color-scheme: dark;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 72px;
+}
+.page { max-width: 980px; margin: 0 auto; display: grid; gap: 64px; }
+h1, h2, h3 { font-family: var(--display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2.3rem, 6vw, 3.6rem); font-weight: 700; letter-spacing: -0.02em; }
+h2 { font-size: 1.65rem; font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 1.05rem; font-weight: 700; }
+p { margin: 0; max-width: 66ch; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+.eyebrow { font: 500 0.74rem/1 var(--mono); letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+.small { font-size: 0.875rem; }
+section { display: grid; gap: 20px; min-width: 0; }
+.section-head { display: grid; gap: 10px; }
+.figure { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 20px; display: grid; gap: 16px; min-width: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.85rem; color: var(--muted); }
+.key { display: inline-flex; align-items: center; gap: 7px; }
+.swatch { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+.swatch.fast { background: var(--fast); }
+.swatch.slow { background: var(--slow); }
+.swatch.local { background: var(--local); }
+.local-t { color: var(--local); font-weight: 600; }
+.dot.local { background: var(--local); }
+.swatch.good { background: var(--good); }
+.curve-t { fill: none; stroke: var(--good); stroke-width: 2.2; }
+.pt-good { fill: var(--good); }
+.ring-good { fill: var(--paper); stroke: var(--good); stroke-width: 3; }
+.curve-q { fill: none; stroke: var(--local); stroke-width: 2.2; }
+.pt-local { fill: var(--local); }
+.ring-local { fill: var(--paper); stroke: var(--local); stroke-width: 3; }
+.two > .figure { align-content: start; }
+table.scorecard td { vertical-align: top; }
+table.scorecard td:first-child { width: 22%; }
+table.scorecard td:last-child { width: 1%; white-space: nowrap; }
+.curve-l { fill: none; stroke: var(--fast); stroke-width: 2.2; }
+.whisker-t { stroke: var(--good); stroke-width: 1.5; opacity: 0.6; }
+.callout.tf { border-left-color: var(--good); background: var(--good-soft); }
+.callout { border-left: 4px solid var(--local); background: var(--local-soft); padding: 12px 16px; border-radius: 6px; }
+.swatch.ring { border: 2px solid var(--muted); background: transparent; }
+.fast-t { color: var(--fast); font-weight: 600; }
+.slow-t { color: var(--slow); font-weight: 600; }
+
+/* Hero */
+.hero { display: grid; gap: 22px; }
+.lede { font-size: 1.12rem; max-width: 62ch; }
+.split-bar { display: flex; height: 54px; border-radius: 8px; overflow: hidden; font: 500 0.85rem/1.2 var(--body); }
+.split-bar > div { display: flex; align-items: center; padding: 0 14px; min-width: 0; }
+.split-bar .keep { background: var(--fast-soft); color: var(--ink); border-left: 5px solid var(--fast); }
+.split-bar .send { background: var(--slow-soft); color: var(--ink); border-left: 5px solid var(--slow); }
+.split-bar b { font-family: var(--mono); font-weight: 500; margin-right: 8px; }
+.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.trio > div { display: grid; gap: 4px; padding: 14px 16px; border-radius: 8px; border: 1px solid var(--rule); background: var(--surface); }
+.trio .num { font: 700 1.9rem/1 var(--display); font-variant-numeric: tabular-nums; }
+.trio .router { border-color: var(--ink); }
+.trio .lab { font-size: 0.85rem; color: var(--muted); }
+
+/* Pipeline */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; counter-reset: step; }
+.steps li { counter-increment: step; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.steps li::before { content: counter(step); font: 500 0.75rem/1 var(--mono); color: var(--muted); }
+.steps .fig { font: 700 1.25rem/1.2 var(--display); }
+.steps .file { font: 0.78rem/1.3 var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+.chip { display: inline-flex; align-items: center; gap: 6px; justify-self: start; font: 500 0.72rem/1 var(--mono); letter-spacing: 0.04em; text-transform: uppercase; padding: 5px 8px; border-radius: 999px; }
+.chip.done { background: var(--good-soft); color: var(--good); }
+.chip.todo { background: var(--med-soft); color: var(--med); }
+.chip.high { background: var(--high-soft); color: var(--high); }
+.chip.med { background: var(--med-soft); color: var(--med); }
+.chip.low { background: var(--low-soft); color: var(--low); }
+.diagram-wrap { overflow-x: auto; }
+.diagram-wrap svg { display: block; min-width: 640px; width: 100%; height: auto; }
+
+svg text { font-family: var(--body); }
+.d-box { fill: var(--surface); stroke: var(--rule); stroke-width: 1.5; }
+.d-fast { fill: var(--fast-soft); stroke: var(--fast); stroke-width: 1.5; }
+.d-slow { fill: var(--slow-soft); stroke: var(--slow); stroke-width: 1.5; }
+.d-todo { fill: var(--med-soft); stroke: var(--med); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.d-arrow { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+.d-head { fill: var(--muted); }
+.d-title { fill: var(--ink); font-weight: 600; font-size: 14px; }
+.d-sub { fill: var(--muted); font-size: 12px; }
+.d-edge { fill: var(--muted); font-size: 12px; font-style: italic; }
+
+/* Dumbbell */
+.db { display: grid; gap: 2px; }
+.db-row { display: grid; grid-template-columns: minmax(0, 190px) minmax(0, 1fr) 104px; gap: 14px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--grid); }
+.db-row:last-child { border-bottom: 0; }
+.db-axis { border-bottom: 0; padding: 0 0 4px; }
+.db-label { font-size: 0.92rem; min-width: 0; }
+.db-track { position: relative; height: 20px; background-image: linear-gradient(to right, var(--grid) 1px, transparent 1px); background-size: 25% 100%; border-right: 1px solid var(--grid); }
+.db-ticks { position: relative; height: 14px; font: 0.72rem/1 var(--mono); color: var(--muted); }
+.db-ticks span { position: absolute; transform: translateX(-50%); }
+.db-line { position: absolute; top: 9px; height: 2px; background: var(--rule); }
+.dot { position: absolute; top: 4px; width: 12px; height: 12px; border-radius: 50%; transform: translateX(-50%); border: 2px solid var(--surface); }
+.dot.fast { background: var(--fast); }
+.dot.slow { background: var(--slow); }
+.db-vals { font: 0.82rem/1 var(--mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--muted); }
+.db-row.flag .db-label { color: var(--high); font-weight: 600; }
+
+/* Tables */
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--grid); }
+th { font: 500 0.74rem/1.2 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+tr.hl td { font-weight: 600; background: var(--local-soft); }
+tr.tfhl td { background: var(--good-soft); }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+th.n { text-align: right; }
+
+/* Charts */
+.chart svg { display: block; width: 100%; height: auto; }
+.gridline { stroke: var(--grid); stroke-width: 1; }
+.axis { stroke: var(--rule); stroke-width: 1; }
+.tick { fill: var(--muted); font-size: 12px; font-family: var(--mono); }
+.axis-title { fill: var(--muted); font-size: 12px; }
+.bar { fill: var(--fast); }
+.bar-label { fill: var(--ink); font-size: 12px; font-family: var(--mono); }
+.curve { fill: none; stroke: var(--ink); stroke-width: 2.2; }
+.step-dot { fill: var(--ink); }
+.pt-fast { fill: var(--fast); }
+.pt-slow { fill: var(--slow); }
+.pt-oracle { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
+.ref-slow { stroke: var(--slow); stroke-width: 1.2; stroke-dasharray: 4 4; opacity: 0.8; }
+.guide { stroke: var(--ink); stroke-width: 1; stroke-dasharray: 3 4; opacity: 0.55; }
+.cur-ring { fill: var(--paper); stroke: var(--ink); stroke-width: 3; }
+.pt-label { fill: var(--ink); font-size: 12.5px; font-weight: 500; }
+.pt-label.muted { fill: var(--muted); }
+
+/* Precision by year */
+.swatch.ink { background: var(--ink); }
+.yr-wrap { position: relative; }
+.era { fill: var(--paper); }
+.era-label { fill: var(--muted); font-size: 11px; font-family: var(--mono); letter-spacing: 0.04em; }
+.era-edge { stroke: var(--rule); stroke-width: 1; stroke-dasharray: 3 3; }
+.ln { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.ln.fast, .wh.fast { stroke: var(--fast); }
+.ln.slow, .wh.slow { stroke: var(--slow); }
+.ln.ink, .wh.ink { stroke: var(--ink); }
+.ln.ink { stroke-width: 2.6; }
+.wh { stroke-width: 1.5; opacity: 0.45; }
+.yd { stroke: var(--surface); stroke-width: 2; }
+.yd.fast { fill: var(--fast); } .yd.slow { fill: var(--slow); } .yd.ink { fill: var(--ink); }
+.hit { fill: transparent; cursor: crosshair; outline: none; }
+.hover-col { fill: var(--ink); opacity: 0; }
+.hover-col.on { opacity: 0.06; }
+.tip { position: absolute; top: 0; left: 0; pointer-events: none; background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; font-size: 0.82rem; line-height: 1.45; box-shadow: 0 6px 18px rgba(0,0,0,0.12); display: none; min-width: 200px; z-index: 2; }
+.tip b { font-family: var(--display); }
+.tip .r { display: grid; grid-template-columns: 12px 1fr auto; gap: 8px; align-items: center; font-variant-numeric: tabular-nums; }
+.tip .ci { color: var(--muted); font-family: var(--mono); font-size: 0.76rem; }
+.tip .foot { color: var(--muted); margin-top: 4px; }
+.takeaways { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 70ch; }
+details summary { cursor: pointer; font-size: 0.88rem; color: var(--muted); }
+details[open] summary { margin-bottom: 10px; }
+
+/* Controls */
+.controls { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: end; }
+.control { display: grid; gap: 6px; }
+.control > span, .control > label { font: 500 0.72rem/1 var(--mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.seg button { font: 500 0.86rem/1 var(--body); color: var(--muted); background: var(--surface); border: 0; padding: 9px 13px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.slider-row { display: flex; align-items: center; gap: 12px; }
+input[type="range"] { width: min(260px, 60vw); accent-color: var(--ink); }
+.tval { font: 500 1rem/1 var(--mono); min-width: 3.2ch; }
+.linkbtn { font: 500 0.82rem/1 var(--body); background: transparent; border: 1px solid var(--rule); color: var(--ink); border-radius: 8px; padding: 9px 12px; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--fast); outline-offset: 2px; }
+.readout { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.readout > div { display: grid; gap: 4px; padding: 10px 12px; border-radius: 8px; background: var(--paper); min-width: 0; }
+.readout .k { font-size: 0.76rem; color: var(--muted); }
+.readout .v { font: 500 1.15rem/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+
+/* Findings */
+.findings { display: grid; gap: 28px; }
+.f-group { display: grid; gap: 12px; }
+.f-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--rule); }
+.f-list li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--rule); }
+.f-list li > div { display: grid; gap: 4px; min-width: 0; }
+.f-list .t { font-weight: 600; }
+.f-list .chip { align-self: start; }
+.f-list p { font-size: 0.94rem; color: var(--muted); }
+.next { margin: 0; padding-left: 1.3em; display: grid; gap: 10px; }
+.next li { padding-left: 4px; }
+.next li::marker { font-family: var(--mono); color: var(--muted); }
+.facts { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 0.88rem; color: var(--muted); }
+.facts b { color: var(--ink); font-family: var(--mono); font-weight: 500; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+footer { font-size: 0.82rem; color: var(--muted); border-top: 1px solid var(--rule); padding-top: 18px; }
+
+@media (max-width: 860px) {
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .readout { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .two { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  body { padding-block: 24px 48px; }
+  .page { gap: 48px; }
+  .trio { grid-template-columns: minmax(0, 1fr); }
+  .steps { grid-template-columns: minmax(0, 1fr); }
+  .readout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .db-row { grid-template-columns: minmax(0, 1fr) 96px; }
+  .db-row .db-track, .db-row .db-ticks { grid-column: 1 / -1; grid-row: 2; }
+  .db-axis .db-label, .db-axis .db-vals { display: none; }
+  .db-axis .db-ticks { grid-row: auto; }
+  .f-list li { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .split-bar { height: auto; flex-direction: column; }
+  .split-bar > div { padding: 12px 14px; width: 100% !important; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cur-ring, .guide { transition: all 160ms ease-out; }
+}
+</style>
+
+<main class="page">
+
+  <header class="hero">
+    <span class="eyebrow">Project review · updated 7 November 2026</span>
+    <h1>fast-slow-cfpb</h1>
+    <p class="lede">This project tests whether <span class="fast-t">Laya</span>, a small local decision model, can serve as a platform component: something you point at a new problem and get a fast, honest answer from. The test problem is sorting CFPB consumer complaints into ten products. Laya labels each complaint in about a tenth of a second and reports how sure it is; when it is unsure, the complaint goes to <span class="slow-t">GPT-5.6 Sol</span>, which is more accurate but about 20 times slower and billed per call. <span class="local-t">Qwen3.5-4B</span>, a general local model, and a plain TF-IDF classifier serve as baselines.</p>
+
+    <div class="figure">
+      <span class="eyebrow">Test set · reweighted to the real complaint mix · threshold 0.55</span>
+      <div class="split-bar" role="img" aria-label="72.5 percent of complaints keep Laya's answer, 27.5 percent are sent to Sol">
+        <div class="keep" style="width:72.5%"><b>72.5%</b>keep Laya's answer</div>
+        <div class="send" style="width:27.5%"><b>27.5%</b>sent to Sol</div>
+      </div>
+      <div class="trio">
+        <div><span class="lab">Laya alone</span><span class="num fast-t">78.2%</span><span class="lab">accuracy, no API calls</span></div>
+        <div class="router"><span class="lab">Router</span><span class="num">88.1%</span><span class="lab">98.5% of Sol's accuracy with 27.5% of the calls</span></div>
+        <div><span class="lab">Sol alone</span><span class="num slow-t">89.4%</span><span class="lab">accuracy, one call per complaint</span></div>
+      </div>
+      <p class="callout tf small"><b>Verdict so far:</b> Laya works as a fast decision component. Zero-shot, its confidence is good enough to route on: sending its least sure 27.5% of complaints to Sol keeps 98.5% of Sol's accuracy on real traffic. Its weak point is zero-shot accuracy on a new taxonomy, 48.0% on the balanced test set against 66.1% for Qwen3.5-4B. It learns quickly from labels: fully fine-tuned on a GPU, it reaches 68.5% with 50 labelled complaints per class, where TF-IDF trained on the same complaints gets 60.6%, and 73.6% with 500, level with TF-IDF's 73.2%. Fine-tuned, its confidence stays calibrated, as long as you read <span class="mono">answer_confidence</span> rather than the field named <span class="mono">confidence</span>. A second question can be added without hurting the first. <a href="#platform">Scorecard below.</a></p>
+    </div>
+  </header>
+
+  <section id="platform">
+    <div class="section-head">
+      <span class="eyebrow">The question</span>
+      <h2>Is Laya usable as a platform component?</h2>
+      <p class="muted">What this one use case shows about each thing a platform component needs to do. All accuracies are on the 2,000-complaint test set, 200 per class, unless marked.</p>
+    </div>
+    <div class="figure">
+      <div class="table-wrap">
+        <table class="scorecard">
+          <thead><tr><th>Capability</th><th>Evidence</th><th>Verdict</th></tr></thead>
+          <tbody>
+            <tr><td><b>Confidence as a routing gate</b></td><td>Zero-shot, Laya → Sol keeps 98.5% of Sol's real-mix accuracy while sending 27.5% of complaints to Sol. Its calibration error on the balanced test set is 0.10, against 0.19 for Qwen.</td><td><span class="chip done">Works</span></td></tr>
+            <tr><td><b>Confidence after fine-tuning</b></td><td>Fully fine-tuned on a GPU, Laya's answer probability tracks its accuracy: mean 0.63–0.75 against 68–74% accuracy, calibration error 0.02–0.06 against 0.10 zero-shot. It also ranks right answers above wrong ones better, AUROC 0.77–0.80 against 0.74 zero-shot. The Mac runs didn't save probabilities, so their calibration can't be checked.</td><td><span class="chip done">Works</span></td></tr>
+            <tr><td><b>Reading the right confidence</b></td><td>For a <span class="mono">choice</span> question, the field named <span class="mono">confidence</span> is normalized entropy, which temperature scaling doesn't calibrate; the calibrated score is <span class="mono">answer_confidence</span>. The mistake is easy to make: this project made it, and on the entropy score the fine-tuned models looked underconfident. Laya's <span class="mono">calibrate.py</span> works as documented.</td><td><span class="chip med">Limit</span></td></tr>
+            <tr><td><b>Speed and footprint</b></td><td>421M parameters, 0.12–0.14 s per complaint per question on this Mac and 0.04 s on a T4 GPU, no API calls.</td><td><span class="chip done">Works</span></td></tr>
+            <tr><td><b>Integration effort</b></td><td>One <span class="mono">choice</span> question with a sentence per label; <span class="mono">src/models/system1.py</span> is 80 lines, the ten label descriptions included.</td><td><span class="chip done">Works</span></td></tr>
+            <tr><td><b>Zero-shot accuracy on a new taxonomy</b></td><td>48.0% balanced over ten overlapping classes, below Qwen3.5-4B's 66.1%. A second, six-way issue-type question gets 41.8%.</td><td><span class="chip high">Weak</span></td></tr>
+            <tr><td><b>Learning from a few labels</b></td><td>10 per class lifts it 10 points, to 58.2%; TF-IDF on the same 100 complaints gets 46.2%.</td><td><span class="chip done">Works</span></td></tr>
+            <tr><td><b>Learning from many labels</b></td><td>Fine-tuning every layer on a T4 GPU: 68.5% at 50 per class, 72.7% at 500, and 73.6% at 500 with Laya's default loss, against TF-IDF's 60.6% and 73.2%. Training only the top 8 of 28 layers, as on the Mac, stalls at 59–60%.</td><td><span class="chip done">Works</span></td></tr>
+            <tr><td><b>Several questions at once</b></td><td>Asking issue type as well leaves product exactly where it was zero-shot, 48.0%, and fine-tuning on both lifts product slightly, 60.3% against 59.3%.</td><td><span class="chip done">Works</span></td></tr>
+            <tr><td><b>Cost of each extra question</b></td><td>Each question is its own pass through the model: two questions take 0.27 s against 0.14 s for one, and fine-tuning on both took 44 minutes against 24.</td><td><span class="chip med">Limit</span></td></tr>
+            <tr><td><b>Fine-tuning on Apple silicon</b></td><td>The trainer ran out of memory three times. It needed layer freezing, fixed-size padding and cache releases added from outside; mixed precision is CUDA-only. Training only the top 8 layers costs 9–13 points against a full fine-tune, which the stock trainer runs unchanged on a free Colab T4: 45 minutes at 500 per class.</td><td><span class="chip med">Limit</span></td></tr>
+            <tr><td><b>Default settings</b></td><td>The 192-token option budget cuts each of the ten label descriptions to 17 tokens, but widening it to 256 lowered validation accuracy from 46.3% to 44.0%, because the complaint gets less room. The default is the better choice here.</td><td><span class="chip done">Works</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">"Limit" is a cost to plan around rather than a failure. Only one problem type, single-label text classification, has been tested, so none of this yet shows Laya generalizes across problem types.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">How it works</span>
+      <h2>Prepare once, then route each complaint</h2>
+    </div>
+    <ol class="steps">
+      <li><h3>Download</h3><span class="fig">21 zip files</span><span class="small muted">CFPB Narratives Archive, Dec 2011 to Aug 2026. The live database stopped publishing narratives on 14 Aug 2026.</span><span class="file">src/data/download.py</span><span class="chip done">Done</span></li>
+      <li><h3>Filter</h3><span class="fig">3,851,415 narratives</span><span class="small muted">Streams each zip in 200k-row chunks and keeps rows with a written narrative.</span><span class="file">src/data/preprocess.py</span><span class="chip done">Done</span></li>
+      <li><h3>Canonicalize</h3><span class="fig">21 labels → 10 classes</span><span class="small muted">CFPB renamed its product field in 2017 and 2023. Merging the eras stops the label from leaking the filing date. Credit repair and debt settlement are mapped by sub-product.</span><span class="file">src/data/taxonomy.py</span><span class="chip done">Done</span></li>
+      <li><h3>Split</h3><span class="fig">2,000 / 2,000</span><span class="small muted">Validation and test, 200 per class, redrawn after the relabel so every class spans all three naming eras. The other 3.85M rows are held back for training: the fine-tuning runs and TF-IDF sample from them.</span><span class="file">src/data/split.py</span><span class="chip done">Done</span></li>
+    </ol>
+
+    <div class="figure">
+      <span class="eyebrow">Per complaint</span>
+      <div class="diagram-wrap">
+        <svg viewBox="0 0 760 270" role="img" aria-label="A complaint goes to Laya. If Laya's confidence is at least the threshold, its label is kept. Otherwise the complaint goes to GPT-5.6 Sol.">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="d-head"/></marker>
+          </defs>
+          <rect x="8" y="110" width="128" height="54" rx="8" class="d-box"/>
+          <text x="72" y="133" text-anchor="middle" class="d-title">Complaint</text>
+          <text x="72" y="151" text-anchor="middle" class="d-sub">narrative text</text>
+
+          <line x1="136" y1="137" x2="172" y2="137" class="d-arrow" marker-end="url(#ah)"/>
+
+          <rect x="174" y="104" width="160" height="66" rx="8" class="d-fast"/>
+          <text x="254" y="129" text-anchor="middle" class="d-title">Laya · System 1</text>
+          <text x="254" y="147" text-anchor="middle" class="d-sub">label + confidence</text>
+          <text x="254" y="162" text-anchor="middle" class="d-sub">~0.12 s, runs locally</text>
+
+          <line x1="334" y1="137" x2="370" y2="137" class="d-arrow" marker-end="url(#ah)"/>
+
+          <polygon points="446,92 522,137 446,182 370,137" class="d-box"/>
+          <text x="446" y="132" text-anchor="middle" class="d-title">confidence</text>
+          <text x="446" y="149" text-anchor="middle" class="d-title">≥ 0.55?</text>
+          <text x="446" y="206" text-anchor="middle" class="d-sub">src/router.py</text>
+
+          <path d="M500 120 L520 60 L556 60" class="d-arrow" marker-end="url(#ah)"/>
+          <text x="512" y="48" class="d-edge">sure</text>
+          <path d="M500 154 L520 214 L556 214" class="d-arrow" marker-end="url(#ah)"/>
+          <text x="508" y="240" class="d-edge">unsure</text>
+
+          <rect x="558" y="28" width="194" height="64" rx="8" class="d-fast"/>
+          <text x="655" y="54" text-anchor="middle" class="d-title">Keep Laya's label</text>
+          <text x="655" y="73" text-anchor="middle" class="d-sub">72.5% of real traffic</text>
+
+          <rect x="558" y="182" width="194" height="64" rx="8" class="d-slow"/>
+          <text x="655" y="207" text-anchor="middle" class="d-title">GPT-5.6 Sol · System 2</text>
+          <text x="655" y="226" text-anchor="middle" class="d-sub">27.5% of real traffic · ~2.7 s per call</text>
+        </svg>
+      </div>
+      <p class="small muted">Both models have run over all 4,000 validation and test complaints (<span class="mono">src/models/system1.py</span>, <span class="mono">src/models/system2.py</span>). The routing step (<span class="mono">src/router.py</span>) and the metrics on this page (<span class="mono">src/eval.py</span>) run on those saved predictions. Times are measured from run timestamps, one complaint at a time, on this Mac.</p>
+    </div>
+
+    <div class="facts">
+      <span><b>2015-03-19 → 2026-08-11</b> narrative dates</span>
+      <span><b>117</b> median words</span>
+      <span><b>14.5%</b> over 300 words</span>
+      <span><b>65%</b> of real traffic is credit reporting</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">The two systems</span>
+      <h2>Sol wins every class; Qwen usually lands in between</h2>
+      <p class="muted">Accuracy per class on the validation set, 200 complaints each, sorted by how much Sol adds over Laya. Qwen3.5-4B comes within 5 points of Sol on money transfers, mortgages, credit cards and credit reporting, and is no better than Laya on debt collection and debt management.</p>
+    </div>
+    <div class="figure">
+      <div class="legend"><span class="key"><span class="swatch fast"></span>Laya</span><span class="key"><span class="swatch local"></span>Qwen3.5-4B</span><span class="key"><span class="swatch slow"></span>GPT-5.6 Sol</span></div>
+      <div class="db" id="dumbbell"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Balanced eval set</th><th class="n">Laya acc.</th><th class="n">Laya macro-F1</th><th class="n">Qwen acc.</th><th class="n">Qwen macro-F1</th><th class="n">Sol acc.</th><th class="n">Sol macro-F1</th></tr></thead>
+        <tbody>
+          <tr><td>Validation</td><td class="n">46.3%</td><td class="n">0.459</td><td class="n">65.5%</td><td class="n">0.651</td><td class="n">74.9%</td><td class="n">0.751</td></tr>
+          <tr><td>Test</td><td class="n">48.0%</td><td class="n">0.479</td><td class="n">66.1%</td><td class="n">0.653</td><td class="n">77.1%</td><td class="n">0.770</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">The routing signal</span>
+      <h2>Laya's confidence ranks its own answers well</h2>
+      <p class="muted">Laya's accuracy within each band of its answer probability, validation set; the dark tick marks the band's mean probability. Accuracy rises from about 20% in the two lowest bands to 74% in the highest, so the score ranks answers well. Zero-shot it claims more than it earns, most at the top: complaints scored 0.9 or more average 0.96 and are right 74% of the time. On the real class mix, where its strongest classes dominate, its calibration error is 0.07 on validation and 0.09 on test.</p>
+    </div>
+    <div class="figure chart">
+      <svg id="confchart" viewBox="0 0 640 290" role="img" aria-label="Bar chart of Laya accuracy by answer-probability band, rising from 21 percent to 74 percent, with each band's mean probability marked"></svg>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">The trade-off</span>
+      <h2>Pick a threshold, see what it costs</h2>
+      <p class="muted">Each point is one threshold: complaints whose confidence falls below it go to Sol, so moving right sends more to Sol. The dashed orange line is Sol on everything. The purple curve puts Qwen3.5-4B first instead of Laya; it sits above Laya's at every share, and its ring marks its own threshold, 0.84, picked by the same rule. The green curve puts the supervised TF-IDF model first: on the real mix it starts above Sol, and on validation it peaks at 10% sent, which is where its 0.61 comes from.</p>
+    </div>
+    <div class="figure">
+      <div class="controls">
+        <div class="control"><span>Class mix</span>
+          <div class="seg" id="mixSeg"><button type="button" id="mix-real" data-v="real" aria-pressed="true">Real complaint mix</button><button type="button" id="mix-bal" data-v="balanced" aria-pressed="false">Balanced eval set</button></div>
+        </div>
+        <div class="control"><span>Split</span>
+          <div class="seg" id="splitSeg"><button type="button" id="split-val" data-v="val" aria-pressed="false">Validation</button><button type="button" id="split-test" data-v="test" aria-pressed="true">Test</button></div>
+        </div>
+        <div class="control"><label for="thr">Threshold</label>
+          <div class="slider-row"><input type="range" id="thr" min="0" max="1" step="0.01" value="0.55"><span class="tval" id="tval">0.55</span><button type="button" class="linkbtn" id="resetT">Reset to 0.55</button></div>
+        </div>
+      </div>
+      <div class="chart"><svg id="routechart" viewBox="0 0 680 400" role="img" aria-label="Accuracy against share of complaints sent to Sol"></svg></div>
+      <div class="legend">
+        <span class="key"><span class="swatch ink"></span>Laya first, then Sol</span>
+        <span class="key"><span class="swatch local"></span>Qwen3.5-4B first, then Sol (left end: Qwen alone)</span>
+        <span class="key"><span class="swatch good"></span>TF-IDF first, then Sol (left end: TF-IDF alone; ring: t = 0.61)</span>
+        <span class="key"><span class="swatch fast"></span>Laya alone</span>
+        <span class="key"><span class="swatch slow"></span>Sol on everything</span>
+        <span class="key"><span class="swatch ring"></span>Perfect router (sends only Laya's mistakes)</span>
+      </div>
+      <div class="readout" aria-live="polite">
+        <div><span class="k">Sent to Sol</span><span class="v" id="r-esc"></span></div>
+        <div><span class="k">Accuracy</span><span class="v" id="r-acc"></span></div>
+        <div><span class="k">Share of Sol's accuracy</span><span class="v" id="r-share"></span></div>
+        <div><span class="k">Sol calls per 1,000</span><span class="v" id="r-calls"></span></div>
+        <div><span class="k">Time per 1,000</span><span class="v" id="r-time"></span></div>
+        <div><span class="k">Sol alone, per 1,000</span><span class="v" id="r-soltime"></span></div>
+      </div>
+      <p class="small muted"><span class="mono">src/eval.py</span> picked 0.55 on the validation set, real mix, as the lowest threshold on a 0.01 grid reaching 97% of Sol's accuracy; the test figures played no part. "Real complaint mix" reweights the 200-per-class sets to each class's share of all 3.85M narratives. The smaller classes rest on 200 complaints each, so treat the third digit loosely.</p>
+    </div>
+  </section>
+
+
+  <section id="local">
+    <div class="section-head">
+      <span class="eyebrow">Local models</span>
+      <h2>Put first, Qwen3.5-4B needs Sol for 16% of complaints, against Laya's 28%</h2>
+      <p class="muted">Qwen3.5-4B, 4-bit, running on MLX on this Mac (M4, 16 GB). The prompt numbers the ten classes and one forward pass reads the probabilities of the ten digit tokens, so it returns a label and a confidence like Laya does. It ran over all 4,000 validation and test complaints at a median 1.29 s each, peaking at 3.9 GB; running the shared instructions once and reusing them cut that to 0.78 s. Laya's README calls it a base to fine-tune, and that shows: zero-shot, a general 4B model beats it by 5 points on the real mix and 18 on the balanced set.</p>
+    </div>
+    <div class="figure">
+      <span class="eyebrow">Test set</span>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Configuration</th><th class="n">Real mix</th><th class="n">Balanced</th><th class="n">To Sol, real</th><th class="n">To Sol, balanced</th><th class="n">Local time / complaint</th></tr></thead>
+          <tbody>
+            <tr><td>Laya alone</td><td class="n">78.2%</td><td class="n">48.0%</td><td class="n">0%</td><td class="n">0%</td><td class="n">0.12 s</td></tr>
+            <tr><td>Qwen3.5-4B alone</td><td class="n">83.5%</td><td class="n">66.1%</td><td class="n">0%</td><td class="n">0%</td><td class="n">0.78 s</td></tr>
+            <tr><td>Sol alone</td><td class="n">89.4%</td><td class="n">77.1%</td><td class="n">100%</td><td class="n">100%</td><td class="n">—</td></tr>
+            <tr><td>Laya → Qwen, t = 0.33</td><td class="n">81.5%</td><td class="n">58.2%</td><td class="n">0%</td><td class="n">0%</td><td class="n">0.22 s</td></tr>
+            <tr><td>Laya → Sol, t = 0.55</td><td class="n">88.1%</td><td class="n">73.3%</td><td class="n">27.5%</td><td class="n">51.7%</td><td class="n">0.12 s</td></tr>
+            <tr class="hl"><td>Qwen → Sol, t = 0.84</td><td class="n">88.2%</td><td class="n">73.9%</td><td class="n">15.6%</td><td class="n">30.5%</td><td class="n">0.78 s</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">All three thresholds were picked on validation by the same rule: the lowest that reaches 97% of the slower model's real-mix accuracy. Qwen-first matches Laya-first, 88.2% against 88.1%, while sending 15.6% of complaints to Sol instead of 27.5%. One at a time, 1,000 real-mix complaints take about 20 min Qwen-first, 14 min Laya-first and 44 min with Sol alone.</p>
+    </div>
+    <div class="two">
+      <div class="figure">
+        <h3>Behind Laya, Qwen can't replace Sol</h3>
+        <p class="small muted">As the slow model, Qwen levels off near 84% however much Laya hands it, while Sol climbs to 90%. At Laya's 0.55 threshold, which hands off 28%, Laya → Qwen scores 83.3%, slightly below Qwen alone at 83.5%.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Laya hands off</th><th class="n">→ Qwen</th><th class="n">→ Sol</th></tr></thead>
+            <tbody>
+              <tr><td>10%</td><td class="n">81.5%</td><td class="n">83.7%</td></tr>
+              <tr><td>28%</td><td class="n">83.3%</td><td class="n">88.1%</td></tr>
+              <tr><td>49%</td><td class="n">83.9%</td><td class="n">90.0%</td></tr>
+              <tr><td>69%</td><td class="n">83.6%</td><td class="n">89.6%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small muted">Test set, real mix.</p>
+      </div>
+      <div class="figure">
+        <h3>Its confidence ranks worse, but it starts higher</h3>
+        <p class="small muted">Qwen's confidence separates right from wrong answers less well than Laya's, and it is more overconfident: 61% of validation complaints score 0.9 or more, against 20% for Laya. It still routes better because it makes fewer mistakes to begin with, so fewer complaints need Sol.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Test set, balanced</th><th class="n">Laya</th><th class="n">Qwen</th></tr></thead>
+            <tbody>
+              <tr><td>AUROC, right vs wrong</td><td class="n">0.74</td><td class="n">0.67</td></tr>
+              <tr><td>Accuracy, more confident half</td><td class="n">66.5%</td><td class="n">77.1%</td></tr>
+              <tr><td>Accuracy, less confident half</td><td class="n">29.5%</td><td class="n">55.0%</td></tr>
+              <tr><td>ECE</td><td class="n">0.096</td><td class="n">0.194</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <p class="small muted">A larger model, Qwen3-8B 4-bit, was tried on a 100-complaint pilot and dropped: 56% accuracy against the 4B's 68%, at twice the time, and it pushed the Mac into swap.</p>
+  </section>
+
+  <section id="supervised">
+    <div class="section-head">
+      <span class="eyebrow">Supervised baseline</span>
+      <h2>Training on labelled complaints beats every model here, Sol included</h2>
+      <p class="muted">The project holds back 3.85M labelled narratives that no model had learned from. <span class="mono">src/models/tfidf.py</span> trains TF-IDF word and word-pair features with logistic regression on up to 30,000 per class (278,594 complaints), in about 6 minutes on the CPU. Training size and regularization were picked on validation only, from 8,000 or 30,000 per class and C of 1, 3, 10 or 30. It trains on equal classes, so it ships two ways: <span class="mono">tfidf</span> reweights its probabilities to the real class shares, for routing real traffic, and <span class="mono">tfidf-balanced</span> doesn't.</p>
+    </div>
+    <div class="figure">
+      <span class="eyebrow">Test set</span>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Configuration</th><th class="n">Real mix</th><th class="n">Balanced</th><th class="n">To Sol, real</th><th class="n">To Sol, balanced</th><th class="n">Time / complaint</th></tr></thead>
+          <tbody>
+            <tr><td>Sol alone</td><td class="n">89.4%</td><td class="n">77.1%</td><td class="n">100%</td><td class="n">100%</td><td class="n">~2.7 s, billed</td></tr>
+            <tr><td>Laya → Sol, t = 0.55</td><td class="n">88.1%</td><td class="n">73.3%</td><td class="n">27.5%</td><td class="n">51.7%</td><td class="n">0.12 s</td></tr>
+            <tr><td>Qwen → Sol, t = 0.84</td><td class="n">88.2%</td><td class="n">73.9%</td><td class="n">15.6%</td><td class="n">30.5%</td><td class="n">0.78 s</td></tr>
+            <tr><td>TF-IDF alone (real-mix reweighting)</td><td class="n">90.6%</td><td class="n">71.5%</td><td class="n">0%</td><td class="n">0%</td><td class="n">~3 ms</td></tr>
+            <tr><td>TF-IDF alone (no reweighting)</td><td class="n">85.0%</td><td class="n">80.5%</td><td class="n">0%</td><td class="n">0%</td><td class="n">~3 ms</td></tr>
+            <tr class="hl tfhl"><td>TF-IDF → Sol, t = 0.61</td><td class="n">92.4%</td><td class="n">77.3%</td><td class="n">9.1%</td><td class="n">24.2%</td><td class="n">~3 ms</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small muted">The router's usual rule, the lowest threshold reaching 97% of Sol's accuracy, picks 0 for TF-IDF because it already beats Sol on validation, so it would never ask Sol. Its 0.61 is the threshold that maximizes validation real-mix accuracy instead. Times are live, one complaint at a time; scoring a whole set at once takes about 0.1 ms per complaint. Without reweighting, TF-IDF also gets debt or credit management right 55.5% of the time on the test set, against 35.0% for Sol and 27.5% for Laya: it learns how CFPB actually files that class.</p>
+    </div>
+  </section>
+
+  <section id="lowdata">
+    <div class="section-head">
+      <span class="eyebrow">Fine-tuning</span>
+      <h2>Fully fine-tuned, Laya leads with few labels and keeps pace with many</h2>
+      <p class="muted">Laya fine-tuned with its own trainer on 10 to 500 labelled complaints per class, against TF-IDF trained on exactly the same complaints. Two setups: on this Mac only the top 8 of 28 layers could be trained; on a Colab T4 GPU every layer was, in mixed precision. A new problem usually starts with few labels, so the left side of this chart matters most for a platform.</p>
+    </div>
+    <div class="figure chart">
+      <span class="eyebrow">Test set · balanced accuracy</span>
+      <svg viewBox="0 0 740 340" role="img" aria-label="Balanced test accuracy against labelled complaints per class. Laya fully fine-tuned on a T4 rises from 48% zero-shot to 68.5% at 50 and 72.7% at 500, 73.6% with its default loss. Laya with only the top 8 layers trained on the Mac stays near 60%. TF-IDF rises from 46% at 10 to 73% at 500."><line class="gridline" x1="56" x2="600" y1="288.0" y2="288.0"/><text class="tick" x="48" y="292.0" text-anchor="end">40%</text><line class="gridline" x1="56" x2="600" y1="221.0" y2="221.0"/><text class="tick" x="48" y="225.0" text-anchor="end">50%</text><line class="gridline" x1="56" x2="600" y1="154.0" y2="154.0"/><text class="tick" x="48" y="158.0" text-anchor="end">60%</text><line class="gridline" x1="56" x2="600" y1="87.0" y2="87.0"/><text class="tick" x="48" y="91.0" text-anchor="end">70%</text><line class="gridline" x1="56" x2="600" y1="20.0" y2="20.0"/><text class="tick" x="48" y="24.0" text-anchor="end">80%</text><text class="tick" x="66.0" y="308" text-anchor="middle">zero-shot</text><text class="tick" x="146.0" y="308" text-anchor="middle">10</text><text class="tick" x="332.8" y="308" text-anchor="middle">50</text><text class="tick" x="413.2" y="308" text-anchor="middle">100</text><text class="tick" x="600.0" y="308" text-anchor="middle">500</text><text class="axis-title" x="328" y="332" text-anchor="middle">Labelled complaints per class (log scale)</text><line class="axis" x1="56" x2="600" y1="288" y2="288"/><path class="curve-t" d="M146.0 246.5 L332.8 149.8 L413.2 111.9 L600.0 65.6"/><line class="whisker-t" x1="146.0" x2="146.0" y1="264.9" y2="236.4"/><circle class="pt-good" cx="146.0" cy="246.5" r="4.5"/><line class="whisker-t" x1="332.8" x2="332.8" y1="164.7" y2="135.6"/><circle class="pt-good" cx="332.8" cy="149.8" r="4.5"/><line class="whisker-t" x1="413.2" x2="413.2" y1="120.2" y2="107.8"/><circle class="pt-good" cx="413.2" cy="111.9" r="4.5"/><line class="whisker-t" x1="600.0" x2="600.0" y1="69.2" y2="62.2"/><circle class="pt-good" cx="600.0" cy="65.6" r="4.5"/><path class="curve-l" style="stroke-dasharray:5 4;opacity:.6" d="M66.0 234.4 L146.0 166.1 L332.8 159.0 L413.2 155.0 L600.0 153.0"/><path class="curve-l" style="stroke-width:2.8" d="M66.0 234.4 L332.8 97.4 L600.0 68.9"/><circle class="pt-fast" cx="332.8" cy="97.4" r="5.5"/><circle class="pt-fast" cx="600.0" cy="68.9" r="5.5"/><circle class="cur-ring" style="stroke:var(--fast)" cx="600.0" cy="62.9" r="6"/><text class="pt-label" x="332.8" y="84.0" text-anchor="middle" style="fill:var(--fast)">68.5%</text><circle class="pt-fast" cx="66.0" cy="234.4" r="4.5"/><circle class="pt-fast" cx="146.0" cy="166.1" r="4.5"/><circle class="pt-fast" cx="332.8" cy="159.0" r="4.5"/><circle class="pt-fast" cx="413.2" cy="155.0" r="4.5"/><circle class="pt-fast" cx="600.0" cy="153.0" r="4.5"/><text class="pt-label" x="612.0" y="44.0" style="fill:var(--good)">TF-IDF 73.2%</text><text class="pt-label" x="612.0" y="66.0" style="fill:var(--fast)">Laya full 72.7%</text><text class="pt-label muted" x="612.0" y="82.0">○ default loss 73.6%</text><text class="pt-label" x="612.0" y="157.0" style="fill:var(--fast);opacity:.75">Laya top 8: 60.2%</text><text class="pt-label muted" x="142.0" y="154.1" text-anchor="middle">58.2%</text><text class="pt-label muted" x="154.0" y="264.5">46.2%</text></svg>
+      <div class="legend">
+        <span class="key"><span class="swatch fast"></span>Laya, every layer fine-tuned on a T4, soft-ce loss (left: zero-shot); ring: Laya's default rlcd loss</span>
+        <span class="key"><span class="swatch fast" style="opacity:.5"></span>Laya, top 8 layers fine-tuned on this Mac (dashed)</span>
+        <span class="key"><span class="swatch good"></span>TF-IDF on the same complaints, mean of 5 samples; whiskers span them</span>
+      </div>
+      <p class="small muted">Mac: one run per size, top 8 of 28 encoder layers trained, 10, 4, 3 and 1 epochs from smallest to largest, 16 to 60 minutes each. T4: one run per size, every layer, fp16, 4 epochs, 4.6 minutes at 50 per class and 45 at 500. A one-epoch T4 run at 500 scores 71.7%, against the Mac's 60.2% with the same single epoch, so the gap comes from the frozen layers, not from training longer. Zero-shot scores 48.0% on both machines. TF-IDF's five samples spread over about 4 points at 10 and at 50 per class, so Laya's 12-point lead at 10 (on the Mac) and 8-point lead at 50 (on the T4) both hold.</p>
+      <p class="small muted">On the real class mix, training on equal classes erases what Laya knew about which products are common: scored as is, the T4 model at 50 per class drops to 65.6%, below zero-shot's 78.2%. Shifting its probabilities to the real class shares, as the <span class="mono">tfidf</span> model does, more than recovers it: 83.5% at 50 per class and 86.8% at 500 with the default loss, against TF-IDF's 66.4% and 84.0% shifted the same way. The Mac runs reach 78–79% shifted.</p>
+    </div>
+    <div class="two">
+      <div class="figure">
+        <h3>A second question doesn't disturb the first</h3>
+        <p class="small muted">The same complaints asked a second question: which of six issue types, grouped from CFPB's own issue field (it covers 88% of test complaints).</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Test set</th><th class="n">Product</th><th class="n">Issue type</th><th class="n">s / complaint</th></tr></thead>
+            <tbody>
+              <tr><td>Zero-shot, product only</td><td class="n">48.0%</td><td class="n">–</td><td class="n">0.14</td></tr>
+              <tr><td>Zero-shot, both</td><td class="n">48.0%</td><td class="n">41.8%</td><td class="n">0.27</td></tr>
+              <tr><td>Fine-tuned at 50, product only</td><td class="n">59.3%</td><td class="n">–</td><td class="n">0.14</td></tr>
+              <tr class="hl"><td>Fine-tuned at 50, both</td><td class="n">60.3%</td><td class="n">50.7%</td><td class="n">0.27</td></tr>
+              <tr><td>TF-IDF at 50, one model per field</td><td class="n">60.6%</td><td class="n">55.4%</td><td class="n">–</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small muted">Product is balanced accuracy. Every question is its own pass, so two questions take twice the time; training on both took 44 minutes against 24.</p>
+      </div>
+      <div class="figure">
+        <h3>What it took to train on a 16 GB Mac</h3>
+        <p class="small muted">The first three runs ran out of memory. Each was stopped by a GPU memory cap set in advance rather than hanging the Mac.</p>
+        <ul class="takeaways small">
+          <li><b>Full fine-tuning doesn't fit.</b> All 421M parameters in fp32 need about 6.4 GB for weights, gradients and optimizer state before any complaint goes through. Freezing all but the top 8 layers cut that to about 3 GB.</li>
+          <li><b>Variable batch shapes leak memory.</b> PyTorch's Apple GPU backend keeps work per input shape, and Laya pads each batch to its own longest complaint, so memory outside the tensors kept growing. Padding to multiples of 128 tokens and releasing the cache every 25 batches held it flat.</li>
+          <li><b>The freezing caused the plateau.</b> A full fine-tune in mixed precision on a free Colab T4 needed none of these workarounds and scored 9–13 points higher at 50 and at 500 per class.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Over time</span>
+      <h2>Precision has held steady since 2017; 2015 is the outlier</h2>
+      <p class="muted">Precision by the year each complaint was filed. For every label a system handed out that year, the share that was right, averaged across labels. The models never changed; what changes is the complaints. Validation and test combined, 4,000 complaints from the redrawn split, router at 0.55. Whiskers are 95% bootstrap intervals.</p>
+    </div>
+    <div class="figure">
+      <div class="legend"><span class="key"><span class="swatch slow"></span>GPT-5.6 Sol</span><span class="key"><span class="swatch ink"></span>Router</span><span class="key"><span class="swatch fast"></span>Laya</span></div>
+      <div class="chart yr-wrap" id="yrWrap">
+        <svg id="yrchart" viewBox="0 0 680 380" role="img" aria-label="Macro precision by complaint year, 2015 to 2026, for Sol, the router and Laya. Sol is at 63 percent in 2015 and between 77 and 85 percent from 2017 on. Laya is at 44 percent in 2015, peaks at 73 percent in 2019 and sits at 56 to 58 percent since 2024. The router sits between them, within 3 to 4 points of Sol since 2024."></svg>
+        <div class="tip" id="yrTip" role="status"></div>
+      </div>
+      <ul class="takeaways small">
+        <li><span class="slow-t">Sol</span> is weakest on 2015 complaints (63%) and stays between 77% and 85% from 2017 on. Its 2026 dip to 77% may be noise: that year's interval overlaps 2025's.</li>
+        <li><span class="fast-t">Laya</span> is weakest on 2015 complaints (44%), best on 2019 (73%), and at 56–58% since 2024.</li>
+        <li>The <b>router</b> trails Sol by 3–4 points on 2024–2026 complaints and by up to 11 on 2018 ones. It sends more to Sol on recent complaints: 39–48% before 2021, 48–55% from 2021 on.</li>
+      </ul>
+      <p class="small muted">Each year's sample has its own class mix. 2015 is mostly mortgages and payday loans; 2025, with 1,029 complaints, leans toward money transfers (21%) and debt management (12%). Part of each year's change is which classes show up, not only how hard they are. 2015 rests on 120 complaints, so read its whiskers before its points. The threshold was picked on validation, which is half of this sample, so the router line is slightly flattering.</p>
+      <details>
+        <summary>Show the numbers</summary>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Year</th><th class="n">Complaints</th><th class="n">Laya</th><th class="n">Router</th><th class="n">Sol</th><th class="n">Sent to Sol</th></tr></thead>
+            <tbody id="yrTable"></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Other checks</span>
+      <h2>Two things the averages hide</h2>
+    </div>
+    <div class="two">
+      <div class="figure">
+        <h3>Long narratives don't hurt Laya</h3>
+        <p class="small muted">Laya reads at most 512 tokens, so the question was whether the longest complaints suffer. They don't. Sol and Qwen are the ones that struggle, on the shortest complaints, which often don't name the product at all.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Words</th><th class="n">n</th><th class="n">Laya</th><th class="n">Qwen</th><th class="n">Sol</th></tr></thead>
+            <tbody>
+              <tr><td>under 100</td><td class="n">1,313</td><td class="n">46.1%</td><td class="n">56.0%</td><td class="n">64.2%</td></tr>
+              <tr><td>100–199</td><td class="n">1,226</td><td class="n">44.3%</td><td class="n">68.8%</td><td class="n">78.6%</td></tr>
+              <tr><td>200–299</td><td class="n">611</td><td class="n">50.6%</td><td class="n">72.5%</td><td class="n">83.6%</td></tr>
+              <tr><td>300–399</td><td class="n">332</td><td class="n">45.8%</td><td class="n">71.1%</td><td class="n">81.0%</td></tr>
+              <tr><td>400+</td><td class="n">518</td><td class="n">53.5%</td><td class="n">72.0%</td><td class="n">87.3%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small muted">Validation and test combined, balanced.</p>
+      </div>
+      <div class="figure">
+        <h3>"Debt or credit management" overlaps credit reporting</h3>
+        <p class="small muted">All three models get this class right a third of the time or less, and they make the same mistake: they read it as credit reporting. 154 of the 400 complaints in this class were filed before the August 2023 rename, so it is tested across both naming eras. Accuracy barely differs between them, so the dates are not the problem. Before the rename / after: Laya 24% / 29%, Qwen 29% / 25%, Sol 40% / 33%.</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Predicted as</th><th class="n">Laya</th><th class="n">Qwen</th><th class="n">Sol</th></tr></thead>
+            <tbody>
+              <tr><td>Debt or credit management</td><td class="n">107</td><td class="n">105</td><td class="n">142</td></tr>
+              <tr><td>Credit reporting</td><td class="n">143</td><td class="n">114</td><td class="n">111</td></tr>
+              <tr><td>Debt collection</td><td class="n">75</td><td class="n">44</td><td class="n">54</td></tr>
+              <tr><td>Credit card or prepaid card</td><td class="n">25</td><td class="n">59</td><td class="n">33</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small muted">Out of 400 true "Debt or credit management" complaints, validation and test, redrawn split.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <span class="eyebrow">Review</span>
+      <h2>What's solid and what needs attention</h2>
+    </div>
+    <div class="findings">
+      <div class="f-group">
+        <h3>Needs attention</h3>
+        <ul class="f-list">
+          <li><span class="chip high">High</span><div><span class="t">The OpenAI account is out of credits</span><p>The last live call to Sol returned "no credits remaining", so nothing that escalates to Sol works, whichever model goes first. Every Sol figure on this page comes from answers saved earlier.</p></div></li>
+          <li><span class="chip med">Medium</span><div><span class="t">Only one problem type has been tested</span><p>Everything here is single-label text classification on one data set. Showing Laya works across problem types needs a second, different use case, for example one with yes/no or score questions.</p></div></li>
+          <li><span class="chip med">Medium</span><div><span class="t">No router with fine-tuned Laya first yet</span><p>The T4 predictions are in <span class="mono">data/processed/t4/results</span> and scored on the real mix, but no threshold has been picked or router evaluated with fully fine-tuned Laya in front of Sol.</p></div></li>
+          <li><span class="chip low">Low</span><div><span class="t">Debt or credit management is still the weakest class</span><p>The zero-shot models get it right a third of the time or less, because the class overlaps credit reporting. Supervised TF-IDF without reweighting reaches 55.5% on the test set, but the real-mix reweighting the router uses drops it to 15.5%, since the class is 0.2% of real traffic.</p></div></li>
+          <li><span class="chip low">Low</span><div><span class="t">Each question costs a full pass</span><p>Laya doesn't share one reading of the complaint across questions, so a schema with many fields costs proportionally more. Worth checking whether its batching options can pack questions together before relying on wide schemas.</p></div></li>
+          <li><span class="chip low">Low</span><div><span class="t">Saved Qwen predictions predate its speed-up</span><p>Reading the shared instructions once rounds slightly differently: on 200 complaints the median probability moved 0.002 and no routing decision changed. A full rerun, about 52 minutes, would make saved and live results identical.</p></div></li>
+        </ul>
+      </div>
+      <div class="f-group">
+        <h3>Working well</h3>
+        <ul class="f-list">
+          <li><span class="chip done">Solid</span><div><span class="t">Fully fine-tuned, Laya matches TF-IDF</span><p>Trained on every layer on a T4, it scores 68.5% at 50 per class, 8 points ahead of TF-IDF on the same complaints, and 73.6% at 500, level with TF-IDF's 73.2%. Zero-shot matched the Mac exactly, 48.0%, so the two machines agree where they should.</p></div></li>
+          <li><span class="chip done">Solid</span><div><span class="t">Routing reads Laya's calibrated confidence</span><p><span class="mono">system1.classify</span> returns <span class="mono">answer_confidence</span>, the saved predictions carry the same score, rebuilt from their stored probabilities, and <span class="mono">tests/test_eval.py</span> checks which field is read.</p></div></li>
+          <li><span class="chip done">Solid</span><div><span class="t">Laya learns from 10 examples per class</span><p>100 labelled complaints and 16 minutes of training lift it 10 points, 12 ahead of TF-IDF on the same complaints, and a second question can be trained alongside without hurting the first.</p></div></li>
+          <li><span class="chip done">Solid</span><div><span class="t">A free model now beats Sol on real traffic</span><p>Supervised TF-IDF scores 90.6% on the real-mix test set by itself, against Sol's 89.4%, and 92.4% when its least sure 9.1% go to Sol. Settings were picked on validation only, and <span class="mono">tests/test_tfidf.py</span> checks the real-mix reweighting.</p></div></li>
+          <li><span class="chip done">Solid</span><div><span class="t">Qwen runs 1.8× faster</span><p><span class="mono">slm.py</span> runs the 242-token instructions once and gives each complaint a copy of that state, so Qwen takes 0.78 s instead of 1.41 s. <span class="mono">tests/test_slm.py</span> checks that the split prompt reads exactly like the full one.</p></div></li>
+          <li><span class="chip done">Solid</span><div><span class="t">Reproducible data pipeline</span><p>Download is idempotent, and preprocessing streams the zips without unpacking 5 GB of CSVs to disk.</p></div></li>
+          <li><span class="chip done">Solid</span><div><span class="t">Every Sol answer is a valid label</span><p>Structured outputs constrain the reply to the ten classes. All 4,000 responses parsed.</p></div></li>
+          <li><span class="chip done">Solid</span><div><span class="t">Router and evaluation are in the codebase</span><p><span class="mono">src/router.py</span> routes saved predictions or live complaints. <span class="mono">src/eval.py</span> picks the threshold on validation, reports test once in both class mixes, and writes a full sweep to <span class="mono">eval.json</span>. <span class="mono">--fast</span> and <span class="mono">--slow</span> swap either side, and the router runs Laya, TF-IDF or Qwen first live. <span class="mono">tests/test_eval.py</span> checks the metric math.</p></div></li>
+          <li><span class="chip done">Solid</span><div><span class="t">The router keeps 98.5% of Sol's accuracy</span><p>On real-mix test data at 0.55 it sends 27.5% of complaints to Sol and reaches 88.1%. A perfect router would send 21.8% and reach 92.3%, so a better confidence score still has room to help.</p></div></li>
+          <li><span class="chip done">Solid</span><div><span class="t">Sol runs resume and run in parallel</span><p><span class="mono">system2.py</span> runs 8 calls at once, logs each answer as it arrives, and reuses any complaint already answered. The redraw only paid for the complaints that were new.</p></div></li>
+          <li><span class="chip done">Solid</span><div><span class="t">Every class is tested across all naming eras</span><p>The split was redrawn after the sub-product relabel and both systems rerun, so no class is tested only on recent complaints.</p></div></li>
+          <li><span class="chip done">Solid</span><div><span class="t">Local models run without taking the Mac down</span><p>The first run hung the machine as MLX's buffer cache grew. <span class="mono">slm.py</span> now caps the cache and stops the run above 8 GB, and the full 4,000-complaint run peaked at 3.9 GB. Model weights live on the SSD under <span class="mono">models/</span>.</p></div></li>
+        </ul>
+      </div>
+      <div class="f-group">
+        <h3>Suggested order</h3>
+        <ol class="next">
+          <li>Add OpenAI credits.</li>
+          <li>Pick a threshold and route with fully fine-tuned Laya first, from the T4 predictions.</li>
+          <li>Try Laya on a second, different problem type.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <footer>Figures come from the saved predictions in <span class="mono">data/processed</span>: <span class="mono">{val,test}_system{1,2}.parquet</span> for Laya and Sol, <span class="mono">{val,test}_qwen3.5-4b-4bit.parquet</span> for Qwen and the TF-IDF prediction files, scored by <span class="mono">python -m src.eval</span>, with <span class="mono">--slow qwen3.5-4b-4bit</span> for Laya → Qwen, <span class="mono">--fast qwen3.5-4b-4bit</span> for Qwen → Sol and <span class="mono">--fast tfidf</span> for TF-IDF → Sol. Laya's confidence is its calibrated <span class="mono">answer_confidence</span> throughout. The Mac fine-tuning runs and the multi-question test come from <span class="mono">src/experiments/lowdata.py</span>; the full fine-tunes ran from <span class="mono">colab/laya_t4.ipynb</span> on a Colab T4 with laya 0.4.24, one Laya run per size and five TF-IDF samples per size. The option-budget check and the per-year, length and confidence breakdowns come from separate analysis scripts over the same files. All figures use the split redrawn after the sub-product relabel, and real-mix figures reweight each class to its share of the 3,851,415 narratives.</footer>
+</main>
+
+<script>
+(function () {
+  var CLASSES = [
+    ["Money transfer / crypto", 0.24, 0.855, 0.83],
+    ["Payday / personal loans", 0.1, 0.595, 0.495],
+    ["Vehicle loan / lease", 0.3, 0.74, 0.645],
+    ["Student loan", 0.525, 0.89, 0.755],
+    ["Checking / savings", 0.52, 0.805, 0.585],
+    ["Credit card / prepaid", 0.485, 0.73, 0.68],
+    ["Debt collection", 0.495, 0.625, 0.47],
+    ["Mortgage", 0.81, 0.935, 0.915],
+    ["Debt / credit management", 0.26, 0.36, 0.265],
+    ["Credit reporting", 0.895, 0.955, 0.905]
+  ];
+  var CONF = [[0.1, 0.212, 52, 0.187], [0.2, 0.189, 318, 0.251], [0.3, 0.288, 292, 0.349], [0.4, 0.386, 228, 0.449], [0.5, 0.485, 167, 0.547], [0.6, 0.489, 186, 0.652], [0.7, 0.565, 161, 0.747], [0.8, 0.645, 200, 0.854], [0.9, 0.735, 396, 0.963]];
+  var CURVES = {"val":{"balanced":[[0.0,0.0,0.463],[0.01,0.0,0.463],[0.02,0.0,0.463],[0.03,0.0,0.463],[0.04,0.0,0.463],[0.05,0.0,0.463],[0.06,0.0,0.463],[0.07,0.0,0.463],[0.08,0.0,0.463],[0.09,0.0,0.463],[0.1,0.0,0.463],[0.11,0.0,0.463],[0.12,0.0,0.463],[0.13,0.0,0.463],[0.14,0.0,0.463],[0.15,0.0,0.463],[0.16,0.0,0.463],[0.17,0.0015,0.464],[0.18,0.0055,0.4645],[0.19,0.0155,0.4735],[0.2,0.026,0.4785],[0.21,0.0415,0.4885],[0.22,0.0535,0.4965],[0.23,0.067,0.503],[0.24,0.0845,0.516],[0.25,0.102,0.5245],[0.26,0.121,0.5345],[0.27,0.14,0.547],[0.28,0.1565,0.5565],[0.29,0.174,0.566],[0.3,0.185,0.571],[0.31,0.2015,0.581],[0.32,0.214,0.587],[0.33,0.2305,0.5955],[0.34,0.2455,0.603],[0.35,0.2625,0.61],[0.36,0.2745,0.615],[0.37,0.285,0.619],[0.38,0.3055,0.6315],[0.39,0.315,0.635],[0.4,0.331,0.6425],[0.41,0.3405,0.648],[0.42,0.354,0.652],[0.43,0.37,0.6565],[0.44,0.3805,0.6605],[0.45,0.392,0.6675],[0.46,0.4005,0.6695],[0.47,0.411,0.674],[0.48,0.425,0.68],[0.49,0.4365,0.682],[0.5,0.445,0.6845],[0.51,0.4515,0.688],[0.52,0.4615,0.692],[0.53,0.4715,0.6945],[0.54,0.4805,0.698],[0.55,0.4925,0.7],[0.56,0.5005,0.701],[0.57,0.508,0.702],[0.58,0.516,0.705],[0.59,0.521,0.7075],[0.6,0.5285,0.7095],[0.61,0.5355,0.7105],[0.62,0.546,0.7115],[0.63,0.5535,0.714],[0.64,0.5645,0.7165],[0.65,0.574,0.718],[0.66,0.5825,0.7185],[0.67,0.5905,0.7225],[0.68,0.602,0.7235],[0.69,0.613,0.728],[0.7,0.6215,0.7285],[0.71,0.6295,0.7305],[0.72,0.6365,0.7325],[0.73,0.6485,0.7335],[0.74,0.6575,0.7355],[0.75,0.665,0.7365],[0.76,0.675,0.737],[0.77,0.6835,0.737],[0.78,0.689,0.7375],[0.79,0.695,0.738],[0.8,0.702,0.74],[0.81,0.7115,0.7395],[0.82,0.718,0.7405],[0.83,0.7285,0.742],[0.84,0.737,0.7425],[0.85,0.745,0.7425],[0.86,0.755,0.7425],[0.87,0.765,0.743],[0.88,0.7775,0.744],[0.89,0.79,0.744],[0.9,0.802,0.744],[0.91,0.813,0.745],[0.92,0.8265,0.7465],[0.93,0.8405,0.7475],[0.94,0.848,0.748],[0.95,0.862,0.7485],[0.96,0.877,0.748],[0.97,0.9005,0.749],[0.98,0.929,0.75],[0.99,0.956,0.7495],[1.0,0.999,0.749]],"real":[[0.0,0.0,0.752506],[0.01,0.0,0.752506],[0.02,0.0,0.752506],[0.03,0.0,0.752506],[0.04,0.0,0.752506],[0.05,0.0,0.752506],[0.06,0.0,0.752506],[0.07,0.0,0.752506],[0.08,0.0,0.752506],[0.09,0.0,0.752506],[0.1,0.0,0.752506],[0.11,0.0,0.752506],[0.12,0.0,0.752506],[0.13,0.0,0.752506],[0.14,0.0,0.752506],[0.15,0.0,0.752506],[0.16,0.0,0.752506],[0.17,0.000404,0.752645],[0.18,0.00436,0.749528],[0.19,0.00676,0.751592],[0.2,0.012754,0.752961],[0.21,0.017467,0.756116],[0.22,0.021003,0.758452],[0.23,0.025455,0.760899],[0.24,0.036538,0.76445],[0.25,0.047581,0.769805],[0.26,0.057397,0.773715],[0.27,0.064131,0.777459],[0.28,0.07393,0.784337],[0.29,0.078942,0.787756],[0.3,0.089354,0.792576],[0.31,0.097077,0.795774],[0.32,0.104376,0.797423],[0.33,0.112864,0.803659],[0.34,0.123769,0.80884],[0.35,0.133507,0.81081],[0.36,0.136969,0.811757],[0.37,0.140001,0.812567],[0.38,0.151225,0.81755],[0.39,0.156006,0.819166],[0.4,0.167274,0.82823],[0.41,0.173496,0.82953],[0.42,0.184386,0.830608],[0.43,0.195823,0.832371],[0.44,0.206967,0.836544],[0.45,0.211623,0.838412],[0.46,0.217805,0.839118],[0.47,0.222544,0.840912],[0.48,0.23119,0.842696],[0.49,0.235817,0.84314],[0.5,0.238087,0.844055],[0.51,0.244376,0.845779],[0.52,0.248097,0.847885],[0.53,0.251328,0.848551],[0.54,0.255684,0.850518],[0.55,0.270279,0.854575],[0.56,0.279945,0.85771],[0.57,0.291684,0.851498],[0.58,0.298551,0.852755],[0.59,0.301188,0.854035],[0.6,0.305788,0.854522],[0.61,0.316054,0.854674],[0.62,0.327016,0.854827],[0.63,0.33564,0.855257],[0.64,0.339333,0.855876],[0.65,0.349293,0.855583],[0.66,0.356814,0.858565],[0.67,0.362572,0.860215],[0.68,0.379431,0.860198],[0.69,0.385841,0.861319],[0.7,0.392825,0.861479],[0.71,0.408317,0.859767],[0.72,0.421021,0.860813],[0.73,0.440101,0.860831],[0.74,0.446378,0.864521],[0.75,0.45956,0.86466],[0.76,0.477224,0.867917],[0.77,0.486467,0.867904],[0.78,0.497848,0.867966],[0.79,0.506461,0.867852],[0.8,0.508448,0.868429],[0.81,0.519579,0.868269],[0.82,0.528212,0.868675],[0.83,0.535148,0.869843],[0.84,0.553935,0.872584],[0.85,0.566085,0.872584],[0.86,0.57899,0.872584],[0.87,0.594136,0.87584],[0.88,0.614076,0.875972],[0.89,0.625922,0.875972],[0.9,0.649765,0.875792],[0.91,0.661248,0.875923],[0.92,0.674841,0.876707],[0.93,0.696651,0.877346],[0.94,0.70599,0.877537],[0.95,0.724194,0.877619],[0.96,0.754451,0.877428],[0.97,0.794842,0.877522],[0.98,0.839921,0.880861],[0.99,0.894551,0.88067],[1.0,0.998844,0.880479]],"oracle":{"balanced":[0.537,0.7785],"real":[0.247494,0.906956]}},"test":{"balanced":[[0.0,0.0,0.48],[0.01,0.0,0.48],[0.02,0.0,0.48],[0.03,0.0,0.48],[0.04,0.0,0.48],[0.05,0.0,0.48],[0.06,0.0,0.48],[0.07,0.0,0.48],[0.08,0.0,0.48],[0.09,0.0,0.48],[0.1,0.0,0.48],[0.11,0.0,0.48],[0.12,0.0,0.48],[0.13,0.0,0.48],[0.14,0.0,0.48],[0.15,0.0005,0.4805],[0.16,0.001,0.4805],[0.17,0.0045,0.483],[0.18,0.0075,0.4845],[0.19,0.015,0.4885],[0.2,0.0245,0.4925],[0.21,0.031,0.497],[0.22,0.0535,0.5105],[0.23,0.068,0.5205],[0.24,0.089,0.5345],[0.25,0.1045,0.5455],[0.26,0.1225,0.558],[0.27,0.138,0.567],[0.28,0.1545,0.5775],[0.29,0.1745,0.59],[0.3,0.1905,0.5985],[0.31,0.207,0.609],[0.32,0.2225,0.618],[0.33,0.243,0.6295],[0.34,0.2525,0.6335],[0.35,0.27,0.638],[0.36,0.282,0.6415],[0.37,0.301,0.6495],[0.38,0.3165,0.6575],[0.39,0.328,0.663],[0.4,0.3435,0.668],[0.41,0.3555,0.6735],[0.42,0.3665,0.6785],[0.43,0.3805,0.683],[0.44,0.3935,0.6895],[0.45,0.4035,0.695],[0.46,0.412,0.698],[0.47,0.423,0.701],[0.48,0.4395,0.706],[0.49,0.4495,0.71],[0.5,0.463,0.7165],[0.51,0.4755,0.72],[0.52,0.4905,0.7255],[0.53,0.497,0.7285],[0.54,0.508,0.732],[0.55,0.517,0.733],[0.56,0.5305,0.7365],[0.57,0.5385,0.737],[0.58,0.5475,0.7395],[0.59,0.554,0.7395],[0.6,0.563,0.743],[0.61,0.572,0.743],[0.62,0.5835,0.745],[0.63,0.5885,0.747],[0.64,0.597,0.7485],[0.65,0.6055,0.7485],[0.66,0.614,0.7495],[0.67,0.621,0.75],[0.68,0.6285,0.7505],[0.69,0.637,0.7525],[0.7,0.6455,0.755],[0.71,0.6535,0.756],[0.72,0.66,0.7565],[0.73,0.6655,0.757],[0.74,0.675,0.7575],[0.75,0.6825,0.7585],[0.76,0.6885,0.759],[0.77,0.6975,0.76],[0.78,0.706,0.761],[0.79,0.716,0.761],[0.8,0.728,0.761],[0.81,0.735,0.7625],[0.82,0.745,0.763],[0.83,0.7545,0.7625],[0.84,0.7585,0.7625],[0.85,0.7625,0.763],[0.86,0.771,0.7635],[0.87,0.78,0.7645],[0.88,0.7945,0.7655],[0.89,0.802,0.7645],[0.9,0.815,0.765],[0.91,0.8245,0.7645],[0.92,0.839,0.7655],[0.93,0.8505,0.767],[0.94,0.862,0.767],[0.95,0.8745,0.768],[0.96,0.89,0.7695],[0.97,0.906,0.769],[0.98,0.9295,0.769],[0.99,0.9575,0.7695],[1.0,1.0,0.7705]],"real":[[0.0,0.0,0.782034],[0.01,0.0,0.782034],[0.02,0.0,0.782034],[0.03,0.0,0.782034],[0.04,0.0,0.782034],[0.05,0.0,0.782034],[0.06,0.0,0.782034],[0.07,0.0,0.782034],[0.08,0.0,0.782034],[0.09,0.0,0.782034],[0.1,0.0,0.782034],[0.11,0.0,0.782034],[0.12,0.0,0.782034],[0.13,0.0,0.782034],[0.14,0.0,0.782034],[0.15,0.000324,0.782358],[0.16,0.000385,0.782358],[0.17,0.00202,0.78309],[0.18,0.002576,0.783394],[0.19,0.004019,0.784381],[0.2,0.007914,0.784962],[0.21,0.010532,0.785835],[0.22,0.019128,0.789086],[0.23,0.026999,0.792169],[0.24,0.035158,0.797295],[0.25,0.050671,0.810088],[0.26,0.056895,0.81457],[0.27,0.062125,0.817613],[0.28,0.067857,0.821459],[0.29,0.076432,0.82476],[0.3,0.091022,0.833657],[0.31,0.102258,0.837012],[0.32,0.11014,0.839699],[0.33,0.124106,0.843977],[0.34,0.130405,0.841842],[0.35,0.137,0.843287],[0.36,0.140984,0.843966],[0.37,0.150433,0.846766],[0.38,0.159088,0.849678],[0.39,0.16497,0.850745],[0.4,0.175053,0.853129],[0.41,0.182751,0.854715],[0.42,0.189722,0.860371],[0.43,0.201103,0.862193],[0.44,0.210476,0.864645],[0.45,0.214702,0.866193],[0.46,0.217315,0.867372],[0.47,0.221123,0.868245],[0.48,0.22992,0.869412],[0.49,0.238288,0.871824],[0.5,0.2431,0.87339],[0.51,0.251505,0.875041],[0.52,0.262475,0.877994],[0.53,0.265492,0.879309],[0.54,0.271443,0.880665],[0.55,0.275431,0.881062],[0.56,0.294257,0.888388],[0.57,0.303905,0.888482],[0.58,0.312319,0.886337],[0.59,0.315328,0.886337],[0.6,0.319742,0.888648],[0.61,0.329358,0.888968],[0.62,0.335925,0.889801],[0.63,0.337561,0.890112],[0.64,0.348251,0.891025],[0.65,0.363091,0.891025],[0.66,0.37371,0.894364],[0.67,0.380916,0.894629],[0.68,0.39055,0.894699],[0.69,0.399453,0.894677],[0.7,0.408756,0.895265],[0.71,0.413693,0.895985],[0.72,0.422057,0.896046],[0.73,0.429457,0.896238],[0.74,0.448755,0.896397],[0.75,0.457597,0.896569],[0.76,0.466292,0.896639],[0.77,0.479433,0.896646],[0.78,0.492247,0.899915],[0.79,0.518484,0.899985],[0.8,0.536986,0.899489],[0.81,0.551117,0.899848],[0.82,0.567676,0.89993],[0.83,0.580967,0.896673],[0.84,0.585372,0.896673],[0.85,0.593654,0.896938],[0.86,0.603222,0.899629],[0.87,0.610263,0.899793],[0.88,0.634423,0.900382],[0.89,0.646964,0.899743],[0.9,0.670029,0.899317],[0.91,0.687866,0.896372],[0.92,0.712659,0.896511],[0.93,0.725597,0.896941],[0.94,0.750708,0.89692],[0.95,0.767998,0.897267],[0.96,0.798241,0.894394],[0.97,0.822861,0.893836],[0.98,0.850553,0.893857],[0.99,0.892017,0.893443],[1.0,1.0,0.894033]],"oracle":{"balanced":[0.52,0.7985],"real":[0.217966,0.923082]}}};
+  var QFIRST = {"val":{"balanced":[[0.0,0.0,0.6545],[0.01,0.0,0.6545],[0.02,0.0,0.6545],[0.03,0.0,0.6545],[0.04,0.0,0.6545],[0.05,0.0,0.6545],[0.06,0.0,0.6545],[0.07,0.0,0.6545],[0.08,0.0,0.6545],[0.09,0.0,0.6545],[0.1,0.0,0.6545],[0.11,0.0,0.6545],[0.12,0.0,0.6545],[0.13,0.0,0.6545],[0.14,0.0,0.6545],[0.15,0.0,0.6545],[0.16,0.0,0.6545],[0.17,0.0,0.6545],[0.18,0.0,0.6545],[0.19,0.0,0.6545],[0.2,0.0,0.6545],[0.21,0.001,0.6555],[0.22,0.001,0.6555],[0.23,0.001,0.6555],[0.24,0.002,0.656],[0.25,0.0025,0.6565],[0.26,0.004,0.6575],[0.27,0.008,0.658],[0.28,0.01,0.659],[0.29,0.0105,0.659],[0.3,0.012,0.659],[0.31,0.013,0.659],[0.32,0.016,0.6595],[0.33,0.02,0.6605],[0.34,0.0235,0.662],[0.35,0.0285,0.6625],[0.36,0.032,0.664],[0.37,0.0375,0.665],[0.38,0.041,0.6665],[0.39,0.0465,0.669],[0.4,0.0545,0.6715],[0.41,0.06,0.6715],[0.42,0.065,0.673],[0.43,0.068,0.675],[0.44,0.074,0.677],[0.45,0.078,0.678],[0.46,0.082,0.679],[0.47,0.085,0.6785],[0.48,0.0925,0.6795],[0.49,0.097,0.6825],[0.5,0.101,0.6835],[0.51,0.1055,0.6845],[0.52,0.1105,0.6865],[0.53,0.1155,0.688],[0.54,0.12,0.69],[0.55,0.123,0.691],[0.56,0.1295,0.6925],[0.57,0.134,0.6925],[0.58,0.1375,0.694],[0.59,0.142,0.694],[0.6,0.145,0.6935],[0.61,0.1485,0.6945],[0.62,0.1535,0.695],[0.63,0.1615,0.6965],[0.64,0.1665,0.698],[0.65,0.1745,0.7],[0.66,0.1775,0.7005],[0.67,0.183,0.7015],[0.68,0.1865,0.7025],[0.69,0.1925,0.7035],[0.7,0.1955,0.7035],[0.71,0.2005,0.7055],[0.72,0.208,0.7075],[0.73,0.2145,0.7095],[0.74,0.2185,0.7105],[0.75,0.227,0.7115],[0.76,0.2315,0.7125],[0.77,0.238,0.7135],[0.78,0.246,0.7145],[0.79,0.2575,0.716],[0.8,0.264,0.7165],[0.81,0.274,0.7185],[0.82,0.284,0.722],[0.83,0.3025,0.723],[0.84,0.318,0.724],[0.85,0.327,0.7235],[0.86,0.3375,0.726],[0.87,0.352,0.7285],[0.88,0.365,0.732],[0.89,0.378,0.7315],[0.9,0.388,0.732],[0.91,0.4025,0.733],[0.92,0.413,0.733],[0.93,0.4355,0.7345],[0.94,0.4575,0.7355],[0.95,0.483,0.738],[0.96,0.514,0.7395],[0.97,0.5555,0.7415],[0.98,0.607,0.7445],[0.99,0.688,0.747],[1.0,1.0,0.749]],"real":[[0.0,0.0,0.8085],[0.01,0.0,0.8085],[0.02,0.0,0.8085],[0.03,0.0,0.8085],[0.04,0.0,0.8085],[0.05,0.0,0.8085],[0.06,0.0,0.8085],[0.07,0.0,0.8085],[0.08,0.0,0.8085],[0.09,0.0,0.8085],[0.1,0.0,0.8085],[0.11,0.0,0.8085],[0.12,0.0,0.8085],[0.13,0.0,0.8085],[0.14,0.0,0.8085],[0.15,0.0,0.8085],[0.16,0.0,0.8085],[0.17,0.0,0.8085],[0.18,0.0,0.8085],[0.19,0.0,0.8085],[0.2,0.0,0.8085],[0.21,0.0001,0.8086],[0.22,0.0001,0.8086],[0.23,0.0001,0.8086],[0.24,0.0009,0.8092],[0.25,0.0042,0.8124],[0.26,0.0049,0.8131],[0.27,0.0072,0.8137],[0.28,0.0082,0.8145],[0.29,0.0115,0.8145],[0.3,0.0148,0.8145],[0.31,0.0181,0.8145],[0.32,0.0183,0.8145],[0.33,0.0194,0.8146],[0.34,0.0209,0.8155],[0.35,0.0222,0.8156],[0.36,0.023,0.8159],[0.37,0.0252,0.8166],[0.38,0.0292,0.8203],[0.39,0.0312,0.8214],[0.4,0.0339,0.8224],[0.41,0.0356,0.8223],[0.42,0.0376,0.8228],[0.43,0.0386,0.8234],[0.44,0.0402,0.8238],[0.45,0.0412,0.8241],[0.46,0.0428,0.8239],[0.47,0.0434,0.8238],[0.48,0.0461,0.8244],[0.49,0.0475,0.8252],[0.5,0.0494,0.8258],[0.51,0.0507,0.8259],[0.52,0.052,0.8267],[0.53,0.0543,0.8277],[0.54,0.0596,0.8314],[0.55,0.0613,0.832],[0.56,0.0665,0.8323],[0.57,0.0676,0.8328],[0.58,0.0689,0.8334],[0.59,0.0703,0.8334],[0.6,0.071,0.8333],[0.61,0.0795,0.8345],[0.62,0.0844,0.8383],[0.63,0.0896,0.8388],[0.64,0.0923,0.8398],[0.65,0.0962,0.8416],[0.66,0.097,0.8417],[0.67,0.0988,0.8421],[0.68,0.1028,0.8425],[0.69,0.1054,0.843],[0.7,0.1059,0.843],[0.71,0.112,0.8437],[0.72,0.1148,0.8446],[0.73,0.1207,0.849],[0.74,0.1219,0.8492],[0.75,0.1261,0.8504],[0.76,0.127,0.8508],[0.77,0.129,0.851],[0.78,0.1321,0.8515],[0.79,0.1357,0.8516],[0.8,0.1379,0.8516],[0.81,0.1443,0.852],[0.82,0.1538,0.8537],[0.83,0.1634,0.854],[0.84,0.1753,0.8581],[0.85,0.1848,0.8614],[0.86,0.191,0.8626],[0.87,0.1962,0.8642],[0.88,0.2046,0.8685],[0.89,0.2077,0.8679],[0.9,0.2145,0.8683],[0.91,0.221,0.8683],[0.92,0.2246,0.8683],[0.93,0.2323,0.869],[0.94,0.2401,0.8695],[0.95,0.2572,0.8744],[0.96,0.2746,0.8747],[0.97,0.3078,0.8744],[0.98,0.3352,0.8784],[0.99,0.389,0.8796],[1.0,1.0,0.8805]]},"test":{"balanced":[[0.0,0.0,0.6605],[0.01,0.0,0.6605],[0.02,0.0,0.6605],[0.03,0.0,0.6605],[0.04,0.0,0.6605],[0.05,0.0,0.6605],[0.06,0.0,0.6605],[0.07,0.0,0.6605],[0.08,0.0,0.6605],[0.09,0.0,0.6605],[0.1,0.0,0.6605],[0.11,0.0,0.6605],[0.12,0.0,0.6605],[0.13,0.0,0.6605],[0.14,0.0,0.6605],[0.15,0.0,0.6605],[0.16,0.0,0.6605],[0.17,0.0,0.6605],[0.18,0.0,0.6605],[0.19,0.0,0.6605],[0.2,0.0,0.6605],[0.21,0.0,0.6605],[0.22,0.0015,0.6615],[0.23,0.002,0.662],[0.24,0.003,0.662],[0.25,0.004,0.663],[0.26,0.006,0.6635],[0.27,0.0075,0.664],[0.28,0.0095,0.6655],[0.29,0.013,0.669],[0.3,0.0145,0.6695],[0.31,0.017,0.67],[0.32,0.0195,0.671],[0.33,0.0225,0.6715],[0.34,0.0235,0.672],[0.35,0.025,0.6735],[0.36,0.0305,0.6755],[0.37,0.0355,0.677],[0.38,0.042,0.678],[0.39,0.047,0.681],[0.4,0.0485,0.6815],[0.41,0.0515,0.6825],[0.42,0.054,0.6845],[0.43,0.0565,0.6845],[0.44,0.064,0.6865],[0.45,0.07,0.6895],[0.46,0.0725,0.6905],[0.47,0.076,0.6935],[0.48,0.082,0.6955],[0.49,0.0855,0.696],[0.5,0.0905,0.6975],[0.51,0.0945,0.698],[0.52,0.1015,0.698],[0.53,0.1085,0.702],[0.54,0.1125,0.7035],[0.55,0.1155,0.705],[0.56,0.123,0.7065],[0.57,0.128,0.707],[0.58,0.1345,0.7095],[0.59,0.1405,0.712],[0.6,0.1455,0.712],[0.61,0.1485,0.713],[0.62,0.158,0.7165],[0.63,0.1615,0.718],[0.64,0.169,0.719],[0.65,0.172,0.7195],[0.66,0.1815,0.7215],[0.67,0.1845,0.7225],[0.68,0.1895,0.723],[0.69,0.1985,0.725],[0.7,0.204,0.7265],[0.71,0.2105,0.7285],[0.72,0.2145,0.7285],[0.73,0.2215,0.7305],[0.74,0.226,0.7315],[0.75,0.235,0.7325],[0.76,0.2425,0.7315],[0.77,0.246,0.732],[0.78,0.2495,0.7325],[0.79,0.257,0.734],[0.8,0.2645,0.7355],[0.81,0.274,0.7365],[0.82,0.2825,0.737],[0.83,0.2945,0.738],[0.84,0.305,0.739],[0.85,0.315,0.7395],[0.86,0.3255,0.742],[0.87,0.3415,0.7455],[0.88,0.3505,0.747],[0.89,0.361,0.749],[0.9,0.375,0.7505],[0.91,0.3855,0.751],[0.92,0.403,0.7525],[0.93,0.425,0.7545],[0.94,0.443,0.7555],[0.95,0.469,0.7575],[0.96,0.501,0.7605],[0.97,0.54,0.761],[0.98,0.6,0.765],[0.99,0.699,0.7695],[1.0,1.0,0.7705]],"real":[[0.0,0.0,0.8349],[0.01,0.0,0.8349],[0.02,0.0,0.8349],[0.03,0.0,0.8349],[0.04,0.0,0.8349],[0.05,0.0,0.8349],[0.06,0.0,0.8349],[0.07,0.0,0.8349],[0.08,0.0,0.8349],[0.09,0.0,0.8349],[0.1,0.0,0.8349],[0.11,0.0,0.8349],[0.12,0.0,0.8349],[0.13,0.0,0.8349],[0.14,0.0,0.8349],[0.15,0.0,0.8349],[0.16,0.0,0.8349],[0.17,0.0,0.8349],[0.18,0.0,0.8349],[0.19,0.0,0.8349],[0.2,0.0,0.8349],[0.21,0.0,0.8349],[0.22,0.0035,0.8384],[0.23,0.0035,0.8385],[0.24,0.0038,0.8385],[0.25,0.0042,0.8389],[0.26,0.0051,0.8391],[0.27,0.0064,0.8397],[0.28,0.0108,0.8436],[0.29,0.0128,0.8455],[0.3,0.0168,0.8491],[0.31,0.0181,0.8494],[0.32,0.0186,0.8496],[0.33,0.0195,0.85],[0.34,0.0199,0.85],[0.35,0.0208,0.851],[0.36,0.0239,0.8521],[0.37,0.0286,0.8559],[0.38,0.0316,0.8562],[0.39,0.0337,0.8575],[0.4,0.0342,0.8577],[0.41,0.0351,0.8578],[0.42,0.0357,0.8583],[0.43,0.0367,0.8583],[0.44,0.0396,0.8586],[0.45,0.0421,0.86],[0.46,0.0431,0.8604],[0.47,0.0445,0.8617],[0.48,0.047,0.8623],[0.49,0.048,0.8626],[0.5,0.0502,0.8628],[0.51,0.0544,0.8596],[0.52,0.0569,0.8598],[0.53,0.059,0.8613],[0.54,0.0604,0.8617],[0.55,0.0609,0.8619],[0.56,0.0696,0.8619],[0.57,0.0711,0.8623],[0.58,0.0741,0.8638],[0.59,0.0761,0.8646],[0.6,0.0779,0.8648],[0.61,0.079,0.8647],[0.62,0.0858,0.8685],[0.63,0.0874,0.8697],[0.64,0.0932,0.8706],[0.65,0.0943,0.8711],[0.66,0.0982,0.8718],[0.67,0.0997,0.8722],[0.68,0.1023,0.8724],[0.69,0.1051,0.873],[0.7,0.1066,0.8732],[0.71,0.1078,0.8736],[0.72,0.1092,0.8738],[0.73,0.1119,0.8745],[0.74,0.1134,0.8746],[0.75,0.1162,0.8749],[0.76,0.1187,0.8748],[0.77,0.1205,0.8753],[0.78,0.1216,0.8755],[0.79,0.124,0.8757],[0.8,0.1308,0.8765],[0.81,0.1368,0.8766],[0.82,0.1438,0.8772],[0.83,0.1479,0.8781],[0.84,0.1564,0.8816],[0.85,0.1626,0.8817],[0.86,0.1668,0.883],[0.87,0.1743,0.8841],[0.88,0.1794,0.8843],[0.89,0.1864,0.8857],[0.9,0.1912,0.8863],[0.91,0.1958,0.8868],[0.92,0.2083,0.8875],[0.93,0.2234,0.8877],[0.94,0.2295,0.8885],[0.95,0.2472,0.89],[0.96,0.2702,0.8913],[0.97,0.2898,0.8919],[0.98,0.3284,0.8952],[0.99,0.3979,0.8997],[1.0,1.0,0.894]]}};
+  var QPICK = 0.84;
+  var TFIRST = {"val":{"real":[[0.0,0.0,0.8953],[0.01,0.0,0.8953],[0.02,0.0,0.8953],[0.03,0.0,0.8953],[0.04,0.0,0.8953],[0.05,0.0,0.8953],[0.06,0.0,0.8953],[0.07,0.0,0.8953],[0.08,0.0,0.8953],[0.09,0.0,0.8953],[0.1,0.0,0.8953],[0.11,0.0,0.8953],[0.12,0.0,0.8953],[0.13,0.0,0.8953],[0.14,0.0,0.8953],[0.15,0.0,0.8953],[0.16,0.0,0.8953],[0.17,0.0,0.8953],[0.18,0.0,0.8953],[0.19,0.0002,0.8953],[0.2,0.0002,0.8953],[0.21,0.0003,0.8954],[0.22,0.0003,0.8954],[0.23,0.0003,0.8954],[0.24,0.0003,0.8954],[0.25,0.0004,0.8954],[0.26,0.0005,0.8954],[0.27,0.0009,0.8956],[0.28,0.0015,0.896],[0.29,0.0025,0.8963],[0.3,0.0031,0.8966],[0.31,0.0035,0.8969],[0.32,0.0046,0.8974],[0.33,0.0058,0.898],[0.34,0.0074,0.8981],[0.35,0.0086,0.8985],[0.36,0.0096,0.8989],[0.37,0.0128,0.8999],[0.38,0.0154,0.9008],[0.39,0.0173,0.9012],[0.4,0.019,0.9013],[0.41,0.0202,0.9013],[0.42,0.0216,0.9021],[0.43,0.0247,0.9019],[0.44,0.0263,0.9028],[0.45,0.0274,0.9032],[0.46,0.0291,0.9026],[0.47,0.0304,0.9026],[0.48,0.0332,0.9027],[0.49,0.0397,0.9072],[0.5,0.0412,0.9078],[0.51,0.0468,0.908],[0.52,0.0496,0.9078],[0.53,0.0529,0.9092],[0.54,0.0594,0.9068],[0.55,0.0677,0.9112],[0.56,0.0699,0.9117],[0.57,0.0762,0.9116],[0.58,0.0833,0.9116],[0.59,0.0875,0.913],[0.6,0.0905,0.9129],[0.61,0.0995,0.9133],[0.62,0.1054,0.9129],[0.63,0.1156,0.91],[0.64,0.1178,0.9094],[0.65,0.1346,0.9098],[0.66,0.1415,0.9084],[0.67,0.1453,0.9082],[0.68,0.1509,0.9075],[0.69,0.1584,0.9069],[0.7,0.1734,0.9102],[0.71,0.1868,0.9067],[0.72,0.1917,0.9062],[0.73,0.194,0.9061],[0.74,0.1987,0.9057],[0.75,0.2049,0.906],[0.76,0.212,0.906],[0.77,0.2167,0.9045],[0.78,0.2208,0.9045],[0.79,0.2258,0.9045],[0.8,0.234,0.904],[0.81,0.2393,0.902],[0.82,0.2447,0.9013],[0.83,0.2517,0.8999],[0.84,0.2592,0.8999],[0.85,0.2713,0.9031],[0.86,0.2846,0.896],[0.87,0.2897,0.8939],[0.88,0.2969,0.8946],[0.89,0.3071,0.8939],[0.9,0.3158,0.8939],[0.91,0.3322,0.8939],[0.92,0.3398,0.8939],[0.93,0.3553,0.8939],[0.94,0.3711,0.8937],[0.95,0.3995,0.8917],[0.96,0.441,0.8918],[0.97,0.4675,0.8898],[0.98,0.5386,0.8892],[0.99,0.6299,0.8843],[1.0,1.0,0.8805]],"balanced":[[0.0,0.0,0.704],[0.01,0.0,0.704],[0.02,0.0,0.704],[0.03,0.0,0.704],[0.04,0.0,0.704],[0.05,0.0,0.704],[0.06,0.0,0.704],[0.07,0.0,0.704],[0.08,0.0,0.704],[0.09,0.0,0.704],[0.1,0.0,0.704],[0.11,0.0,0.704],[0.12,0.0,0.704],[0.13,0.0,0.704],[0.14,0.0,0.704],[0.15,0.0,0.704],[0.16,0.0,0.704],[0.17,0.0,0.704],[0.18,0.0,0.704],[0.19,0.0005,0.704],[0.2,0.0005,0.704],[0.21,0.001,0.7045],[0.22,0.001,0.7045],[0.23,0.001,0.7045],[0.24,0.001,0.7045],[0.25,0.002,0.7045],[0.26,0.003,0.705],[0.27,0.006,0.707],[0.28,0.0085,0.708],[0.29,0.013,0.71],[0.3,0.017,0.712],[0.31,0.0185,0.7125],[0.32,0.025,0.715],[0.33,0.032,0.7185],[0.34,0.0365,0.72],[0.35,0.043,0.721],[0.36,0.0485,0.722],[0.37,0.055,0.724],[0.38,0.0655,0.729],[0.39,0.073,0.732],[0.4,0.081,0.734],[0.41,0.0855,0.7345],[0.42,0.0935,0.738],[0.43,0.1045,0.7395],[0.44,0.1115,0.743],[0.45,0.118,0.7455],[0.46,0.1245,0.7465],[0.47,0.1315,0.7475],[0.48,0.1405,0.7475],[0.49,0.1495,0.749],[0.5,0.155,0.75],[0.51,0.1665,0.752],[0.52,0.1755,0.7535],[0.53,0.186,0.7575],[0.54,0.1955,0.7595],[0.55,0.2065,0.7625],[0.56,0.2135,0.764],[0.57,0.2235,0.763],[0.58,0.2355,0.7635],[0.59,0.2465,0.765],[0.6,0.256,0.7665],[0.61,0.2665,0.7665],[0.62,0.276,0.7665],[0.63,0.2875,0.764],[0.64,0.293,0.7635],[0.65,0.3075,0.7645],[0.66,0.317,0.763],[0.67,0.326,0.763],[0.68,0.3345,0.7625],[0.69,0.3485,0.7625],[0.7,0.355,0.7635],[0.71,0.3665,0.763],[0.72,0.3765,0.7625],[0.73,0.3825,0.7625],[0.74,0.394,0.7615],[0.75,0.4025,0.762],[0.76,0.4105,0.762],[0.77,0.4195,0.76],[0.78,0.4285,0.76],[0.79,0.4375,0.76],[0.8,0.452,0.76],[0.81,0.4635,0.759],[0.82,0.477,0.7585],[0.83,0.4915,0.7575],[0.84,0.5025,0.7575],[0.85,0.5175,0.7595],[0.86,0.53,0.758],[0.87,0.543,0.7565],[0.88,0.559,0.758],[0.89,0.575,0.757],[0.9,0.5935,0.757],[0.91,0.6125,0.7565],[0.92,0.628,0.7565],[0.93,0.6415,0.7565],[0.94,0.662,0.756],[0.95,0.6905,0.754],[0.96,0.72,0.7545],[0.97,0.747,0.7525],[0.98,0.788,0.7525],[0.99,0.843,0.7505],[1.0,1.0,0.749]]},"test":{"real":[[0.0,0.0,0.9057],[0.01,0.0,0.9057],[0.02,0.0,0.9057],[0.03,0.0,0.9057],[0.04,0.0,0.9057],[0.05,0.0,0.9057],[0.06,0.0,0.9057],[0.07,0.0,0.9057],[0.08,0.0,0.9057],[0.09,0.0,0.9057],[0.1,0.0,0.9057],[0.11,0.0,0.9057],[0.12,0.0,0.9057],[0.13,0.0,0.9057],[0.14,0.0,0.9057],[0.15,0.0,0.9057],[0.16,0.0,0.9057],[0.17,0.0,0.9057],[0.18,0.0,0.9057],[0.19,0.0006,0.9063],[0.2,0.0006,0.9063],[0.21,0.001,0.9063],[0.22,0.001,0.9063],[0.23,0.0012,0.9064],[0.24,0.0012,0.9064],[0.25,0.0015,0.9064],[0.26,0.0026,0.9055],[0.27,0.0027,0.9055],[0.28,0.0028,0.9057],[0.29,0.0032,0.9058],[0.3,0.0039,0.9063],[0.31,0.0048,0.9067],[0.32,0.0059,0.9077],[0.33,0.0075,0.9085],[0.34,0.0085,0.9091],[0.35,0.0097,0.9095],[0.36,0.0106,0.9097],[0.37,0.011,0.9097],[0.38,0.0131,0.9106],[0.39,0.0175,0.9108],[0.4,0.019,0.9114],[0.41,0.0233,0.9149],[0.42,0.0253,0.9157],[0.43,0.0274,0.9167],[0.44,0.029,0.9178],[0.45,0.0302,0.9174],[0.46,0.0325,0.9177],[0.47,0.0351,0.9175],[0.48,0.0406,0.9212],[0.49,0.0418,0.9213],[0.5,0.0481,0.9215],[0.51,0.0512,0.9223],[0.52,0.0536,0.9225],[0.53,0.0581,0.9224],[0.54,0.0618,0.9238],[0.55,0.0651,0.9237],[0.56,0.0679,0.9231],[0.57,0.0742,0.923],[0.58,0.0803,0.923],[0.59,0.083,0.9231],[0.6,0.0881,0.9234],[0.61,0.0913,0.9237],[0.62,0.1003,0.9237],[0.63,0.1073,0.9232],[0.64,0.1162,0.9233],[0.65,0.1215,0.9236],[0.66,0.128,0.9239],[0.67,0.135,0.9239],[0.68,0.1404,0.9246],[0.69,0.1508,0.9215],[0.7,0.1583,0.922],[0.71,0.1621,0.9215],[0.72,0.1669,0.9216],[0.73,0.1693,0.9216],[0.74,0.1749,0.9215],[0.75,0.1767,0.9217],[0.76,0.1842,0.9217],[0.77,0.189,0.9226],[0.78,0.1965,0.923],[0.79,0.2035,0.9199],[0.8,0.2076,0.9198],[0.81,0.2123,0.919],[0.82,0.2161,0.9185],[0.83,0.2209,0.918],[0.84,0.23,0.9157],[0.85,0.2417,0.9122],[0.86,0.2531,0.9111],[0.87,0.2636,0.9113],[0.88,0.2742,0.9113],[0.89,0.2846,0.9114],[0.9,0.3033,0.9114],[0.91,0.3244,0.9103],[0.92,0.3344,0.9097],[0.93,0.3514,0.9091],[0.94,0.3662,0.9096],[0.95,0.3921,0.9067],[0.96,0.426,0.9057],[0.97,0.4753,0.9034],[0.98,0.5271,0.9005],[0.99,0.5974,0.894],[1.0,1.0,0.894]],"balanced":[[0.0,0.0,0.715],[0.01,0.0,0.715],[0.02,0.0,0.715],[0.03,0.0,0.715],[0.04,0.0,0.715],[0.05,0.0,0.715],[0.06,0.0,0.715],[0.07,0.0,0.715],[0.08,0.0,0.715],[0.09,0.0,0.715],[0.1,0.0,0.715],[0.11,0.0,0.715],[0.12,0.0,0.715],[0.13,0.0,0.715],[0.14,0.0,0.715],[0.15,0.0,0.715],[0.16,0.0,0.715],[0.17,0.0,0.715],[0.18,0.0005,0.715],[0.19,0.001,0.7155],[0.2,0.0015,0.7155],[0.21,0.0025,0.7155],[0.22,0.003,0.716],[0.23,0.0045,0.717],[0.24,0.0045,0.717],[0.25,0.0055,0.717],[0.26,0.0085,0.7155],[0.27,0.0095,0.7155],[0.28,0.0105,0.7165],[0.29,0.014,0.7175],[0.3,0.0165,0.719],[0.31,0.0195,0.72],[0.32,0.0225,0.722],[0.33,0.027,0.723],[0.34,0.032,0.727],[0.35,0.036,0.7285],[0.36,0.0425,0.73],[0.37,0.046,0.7305],[0.38,0.054,0.734],[0.39,0.061,0.736],[0.4,0.0645,0.737],[0.41,0.0695,0.7395],[0.42,0.0785,0.7445],[0.43,0.086,0.7475],[0.44,0.0925,0.751],[0.45,0.0975,0.7525],[0.46,0.1065,0.754],[0.47,0.114,0.754],[0.48,0.1215,0.7555],[0.49,0.127,0.7575],[0.5,0.137,0.759],[0.51,0.1465,0.761],[0.52,0.157,0.762],[0.53,0.1665,0.7635],[0.54,0.1755,0.7655],[0.55,0.184,0.7665],[0.56,0.1945,0.7675],[0.57,0.2045,0.768],[0.58,0.218,0.7695],[0.59,0.225,0.7705],[0.6,0.234,0.772],[0.61,0.242,0.773],[0.62,0.2505,0.773],[0.63,0.26,0.7725],[0.64,0.2685,0.7735],[0.65,0.279,0.774],[0.66,0.289,0.7755],[0.67,0.3,0.777],[0.68,0.314,0.7785],[0.69,0.328,0.7795],[0.7,0.3355,0.7805],[0.71,0.342,0.781],[0.72,0.3515,0.7815],[0.73,0.358,0.7815],[0.74,0.367,0.781],[0.75,0.374,0.7825],[0.76,0.3845,0.7825],[0.77,0.3965,0.784],[0.78,0.409,0.786],[0.79,0.4185,0.786],[0.8,0.4315,0.7865],[0.81,0.442,0.786],[0.82,0.449,0.786],[0.83,0.4645,0.7865],[0.84,0.4775,0.7845],[0.85,0.492,0.7835],[0.86,0.5045,0.7825],[0.87,0.5175,0.7825],[0.88,0.5355,0.7825],[0.89,0.552,0.7825],[0.9,0.5695,0.7825],[0.91,0.5915,0.7815],[0.92,0.606,0.781],[0.93,0.628,0.78],[0.94,0.648,0.78],[0.95,0.6715,0.7775],[0.96,0.7025,0.776],[0.97,0.7365,0.774],[0.98,0.7715,0.7715],[0.99,0.8305,0.7705],[1.0,1.0,0.7705]]}};
+  var TPICK = 0.61;
+  var LAYA_S = 0.12, SOL_S = 2.66;
+  var NS = "http://www.w3.org/2000/svg";
+  function pct(v, d) { return (v * 100).toFixed(d == null ? 1 : d) + "%"; }
+
+  // Dumbbell
+  var db = document.getElementById("dumbbell");
+  var axis = '<div class="db-row db-axis"><div class="db-label"></div><div class="db-ticks">' +
+    [0, 25, 50, 75, 100].map(function (v) { return '<span style="left:' + v + '%">' + v + '%</span>'; }).join("") +
+    '</div><div class="db-vals"></div></div>';
+  db.innerHTML = axis + CLASSES.map(function (c) {
+    var lo = Math.min(c[1], c[2], c[3]) * 100, hi = Math.max(c[1], c[2], c[3]) * 100;
+    var flag = c[0].indexOf("Debt / credit") === 0 ? " flag" : "";
+    return '<div class="db-row' + flag + '"><div class="db-label">' + c[0] + '</div><div class="db-track" role="img" aria-label="' + c[0] + ': Laya ' + pct(c[1], 0) + ', Qwen ' + pct(c[3], 0) + ', Sol ' + pct(c[2], 0) + '">' +
+      '<span class="db-line" style="left:' + lo + '%;width:' + (hi - lo) + '%"></span>' +
+      '<span class="dot fast" style="left:' + c[1] * 100 + '%"></span><span class="dot local" style="left:' + c[3] * 100 + '%"></span><span class="dot slow" style="left:' + c[2] * 100 + '%"></span></div>' +
+      '<div class="db-vals"><span class="fast-t">' + Math.round(c[1] * 100) + '</span> · <span class="local-t">' + Math.round(c[3] * 100) + '</span> · <span class="slow-t">' + Math.round(c[2] * 100) + '</span></div></div>';
+  }).join("");
+
+  // Confidence chart
+  (function () {
+    var W = 640, H = 290, m = { l: 48, r: 12, t: 22, b: 62 };
+    var bw = (W - m.l - m.r) / CONF.length;
+    var y = function (v) { return m.t + (1 - v) * (H - m.t - m.b); };
+    var s = "";
+    [0, 0.25, 0.5, 0.75, 1].forEach(function (v) {
+      s += '<line class="gridline" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(v) + '" y2="' + y(v) + '"/>';
+      s += '<text class="tick" x="' + (m.l - 8) + '" y="' + (y(v) + 4) + '" text-anchor="end">' + v * 100 + '%</text>';
+    });
+    CONF.forEach(function (c, i) {
+      var x0 = m.l + i * bw + bw * 0.16, w = bw * 0.68, cx = x0 + w / 2;
+      s += '<rect class="bar" x="' + x0 + '" y="' + y(c[1]) + '" width="' + w + '" height="' + (y(0) - y(c[1])) + '" rx="2"/>';
+      s += '<line x1="' + x0 + '" x2="' + (x0 + w) + '" y1="' + y(c[3]) + '" y2="' + y(c[3]) + '" style="stroke:var(--ink);stroke-width:2.5"/>';
+      s += '<text class="bar-label" x="' + cx + '" y="' + (Math.min(y(c[1]), y(c[3])) - 6) + '" text-anchor="middle">' + Math.round(c[1] * 100) + '</text>';
+      s += '<text class="tick" x="' + cx + '" y="' + (H - m.b + 18) + '" text-anchor="middle">' + c[0].toFixed(1) + '</text>';
+      s += '<text class="tick" x="' + cx + '" y="' + (H - m.b + 34) + '" text-anchor="middle" style="opacity:.75">n=' + c[2] + '</text>';
+    });
+    s += '<line class="axis" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(0) + '" y2="' + y(0) + '"/>';
+    s += '<text class="axis-title" x="' + (m.l + (W - m.l - m.r) / 2) + '" y="' + (H - 6) + '" text-anchor="middle">Laya answer probability band (lower edge)</text>';
+    document.getElementById("confchart").innerHTML = s;
+  })();
+
+  // Routing chart
+  var state = { mix: "real", split: "test", t: 0.55 };
+  var W = 680, H = 400, m = { l: 56, r: 26, t: 20, b: 54 };
+  var YMIN = 0.4, YMAX = 1;
+  function X(v) { return m.l + v * (W - m.l - m.r); }
+  function Y(v) { return m.t + (1 - (v - YMIN) / (YMAX - YMIN)) * (H - m.t - m.b); }
+  function rowFor(curve, t) {
+    var best = curve[0];
+    curve.forEach(function (r) { if (Math.abs(r[0] - t) < Math.abs(best[0] - t)) best = r; });
+    return best;
+  }
+  function draw() {
+    var d = CURVES[state.split], curve = d[state.mix], orc = d.oracle[state.mix];
+    var first = curve[0], last = curve[curve.length - 1], cur = rowFor(curve, state.t);
+    var s = "";
+    for (var v = 0.4; v <= 0.9001; v += 0.1) {
+      s += '<line class="gridline" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(v) + '" y2="' + Y(v) + '"/>';
+      s += '<text class="tick" x="' + (m.l - 8) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + Math.round(v * 100) + '%</text>';
+    }
+    for (var u = 0; u <= 1.0001; u += 0.2) {
+      s += '<line class="gridline" x1="' + X(u) + '" x2="' + X(u) + '" y1="' + m.t + '" y2="' + (H - m.b) + '"/>';
+      s += '<text class="tick" x="' + X(u) + '" y="' + (H - m.b + 18) + '" text-anchor="middle">' + Math.round(u * 100) + '%</text>';
+    }
+    s += '<text class="axis-title" x="' + (m.l + (W - m.l - m.r) / 2) + '" y="' + (H - 8) + '" text-anchor="middle">Share of complaints sent to Sol</text>';
+    s += '<text class="axis-title" transform="translate(14 ' + (m.t + (H - m.t - m.b) / 2) + ') rotate(-90)" text-anchor="middle">Accuracy</text>';
+    s += '<line class="ref-slow" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(last[2]) + '" y2="' + Y(last[2]) + '"/>';
+    var pts = curve.slice().sort(function (a, b) { return a[1] - b[1]; });
+    s += '<path class="curve" d="' + pts.map(function (r, i) { return (i ? "L" : "M") + X(r[1]).toFixed(1) + " " + Y(r[2]).toFixed(1); }).join(" ") + '"/>';
+    pts.forEach(function (r) { if (Math.round(r[0] * 100) % 5) return; s += '<circle class="step-dot" cx="' + X(r[1]) + '" cy="' + Y(r[2]) + '" r="2.4"/>'; });
+    s += '<line class="guide" x1="' + X(cur[1]) + '" x2="' + X(cur[1]) + '" y1="' + Y(cur[2]) + '" y2="' + (H - m.b) + '"/>';
+    s += '<line class="guide" x1="' + m.l + '" x2="' + X(cur[1]) + '" y1="' + Y(cur[2]) + '" y2="' + Y(cur[2]) + '"/>';
+    var tc = TFIRST[state.split][state.mix], tp = rowFor(tc, TPICK);
+    s += '<path class="curve-t" d="' + tc.slice().sort(function (a, b) { return a[1] - b[1]; }).map(function (r, i) { return (i ? "L" : "M") + X(r[1]).toFixed(1) + " " + Y(r[2]).toFixed(1); }).join(" ") + '"/>';
+    s += '<circle class="pt-good" cx="' + X(tc[0][1]) + '" cy="' + Y(tc[0][2]) + '" r="6"/>';
+    s += '<circle class="ring-good" cx="' + X(tp[1]) + '" cy="' + Y(tp[2]) + '" r="7"/>';
+    var qc = QFIRST[state.split][state.mix], qp = rowFor(qc, QPICK);
+    s += '<path class="curve-q" d="' + qc.slice().sort(function (a, b) { return a[1] - b[1]; }).map(function (r, i) { return (i ? "L" : "M") + X(r[1]).toFixed(1) + " " + Y(r[2]).toFixed(1); }).join(" ") + '"/>';
+    s += '<circle class="pt-local" cx="' + X(qc[0][1]) + '" cy="' + Y(qc[0][2]) + '" r="6"/>';
+    s += '<circle class="ring-local" cx="' + X(qp[1]) + '" cy="' + Y(qp[2]) + '" r="7"/>';
+    // Label below both curves, on a leader, so it never collides with the t label above Laya's ring.
+    var under = Math.min(qp[2], rowFor(curve.map(function (r) { return [r[1], r[1], r[2]]; }), qp[1])[2]) - 0.13;
+    s += '<line class="guide" style="stroke:var(--local)" x1="' + X(qp[1]) + '" x2="' + X(qp[1]) + '" y1="' + (Y(qp[2]) + 8) + '" y2="' + (Y(under) - 12) + '"/>';
+    s += '<text class="pt-label" style="fill:var(--local)" x="' + (X(qp[1]) - 4) + '" y="' + Y(under) + '">Qwen first, t = 0.84: ' + pct(qp[1]) + ' to Sol, ' + pct(qp[2]) + '</text>';
+    s += '<circle class="pt-oracle" cx="' + X(orc[0]) + '" cy="' + Y(orc[1]) + '" r="6"/>';
+    s += '<text class="pt-label muted" x="' + (X(orc[0]) + 11) + '" y="' + (Y(orc[1]) - 20) + '">Perfect router ' + pct(orc[1]) + '</text>';
+    s += '<circle class="pt-fast" cx="' + X(first[1]) + '" cy="' + Y(first[2]) + '" r="7"/>';
+    s += '<text class="pt-label" x="' + (X(first[1]) + 12) + '" y="' + (Y(first[2]) + 22) + '">Laya alone ' + pct(first[2]) + '</text>';
+    s += '<circle class="pt-slow" cx="' + X(last[1]) + '" cy="' + Y(last[2]) + '" r="7"/>';
+    s += '<text class="pt-label" x="' + (X(last[1]) - 12) + '" y="' + (Y(last[2]) + 24) + '" text-anchor="end">Sol on everything ' + pct(last[2]) + '</text>';
+    s += '<circle class="cur-ring" cx="' + X(cur[1]) + '" cy="' + Y(cur[2]) + '" r="8"/>';
+    var lx = X(cur[1]), anchor = lx > W - 140 ? "end" : "start", off = anchor === "end" ? -12 : 12;
+    s += '<text class="pt-label" x="' + (lx + off) + '" y="' + (Y(cur[2]) + 26) + '" text-anchor="' + anchor + '">t = ' + cur[0].toFixed(2) + '</text>';
+    document.getElementById("routechart").innerHTML = s;
+
+    var calls = Math.round(cur[1] * 1000);
+    var routerMin = (1000 * LAYA_S + calls * SOL_S) / 60, solMin = 1000 * SOL_S / 60;
+    document.getElementById("r-esc").textContent = pct(cur[1]);
+    document.getElementById("r-acc").textContent = pct(cur[2]);
+    document.getElementById("r-share").textContent = pct(cur[2] / last[2]);
+    document.getElementById("r-calls").textContent = calls.toLocaleString("en-US");
+    document.getElementById("r-time").textContent = routerMin.toFixed(0) + " min";
+    document.getElementById("r-soltime").textContent = solMin.toFixed(0) + " min";
+    document.getElementById("tval").textContent = cur[0].toFixed(2);
+  }
+  function wireSeg(id, key) {
+    var seg = document.getElementById(id);
+    seg.addEventListener("click", function (e) {
+      var b = e.target.closest("button"); if (!b) return;
+      state[key] = b.getAttribute("data-v");
+      seg.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+      draw();
+    });
+  }
+  wireSeg("mixSeg", "mix");
+  wireSeg("splitSeg", "split");
+  var thr = document.getElementById("thr");
+  thr.addEventListener("input", function () { state.t = parseFloat(thr.value); draw(); });
+  document.getElementById("resetT").addEventListener("click", function () { thr.value = "0.55"; state.t = 0.55; draw(); });
+  draw();
+})();
+// Precision by complaint year
+(function () {
+  /* [year, complaints, share sent to Sol, laya [p, lo, hi], sol [...], router [...]] */
+  var YEARS = [[2015, 120, 0.392, [0.4402, 0.3649, 0.5446], [0.6294, 0.5304, 0.7229], [0.5512, 0.4785, 0.6807]], [2016, 165, 0.394, [0.5667, 0.5006, 0.6253], [0.7297, 0.657, 0.7661], [0.706, 0.6202, 0.7445]], [2017, 227, 0.467, [0.5843, 0.4997, 0.6601], [0.7713, 0.7074, 0.8232], [0.7216, 0.6461, 0.7974]], [2018, 186, 0.457, [0.6518, 0.5774, 0.6972], [0.8459, 0.7993, 0.8875], [0.7404, 0.6687, 0.7994]], [2019, 182, 0.484, [0.7271, 0.6692, 0.7743], [0.8174, 0.7522, 0.8739], [0.7988, 0.7385, 0.8543]], [2020, 226, 0.451, [0.6069, 0.5283, 0.6855], [0.7873, 0.7357, 0.8344], [0.7674, 0.7108, 0.824]], [2021, 260, 0.542, [0.6715, 0.6188, 0.7191], [0.8411, 0.7996, 0.8782], [0.7895, 0.7315, 0.8349]], [2022, 294, 0.551, [0.6738, 0.6133, 0.7163], [0.8369, 0.7976, 0.8733], [0.7807, 0.7169, 0.8349]], [2023, 435, 0.522, [0.6257, 0.5654, 0.6786], [0.7988, 0.759, 0.8347], [0.7528, 0.713, 0.7895]], [2024, 554, 0.48, [0.5625, 0.5271, 0.6424], [0.8255, 0.7945, 0.8546], [0.7952, 0.7629, 0.8272]], [2025, 1029, 0.544, [0.5746, 0.5351, 0.614], [0.8161, 0.7913, 0.8403], [0.7875, 0.7588, 0.8138]], [2026, 322, 0.528, [0.5834, 0.5098, 0.6382], [0.7741, 0.7402, 0.8086], [0.7344, 0.6926, 0.7704]]];
+  var SERIES = [
+    { k: 3, cls: "fast", name: "Laya", dx: -9 },
+    { k: 5, cls: "ink", name: "Router", dx: 0 },
+    { k: 4, cls: "slow", name: "Sol", dx: 9 }
+  ];
+  var W = 680, H = 380, m = { l: 52, r: 84, t: 34, b: 58 };
+  var Y0 = YEARS[0][0], slot = (W - m.l - m.r) / YEARS.length;
+  var YMIN = 0.3, YMAX = 1;
+  function XT(t) { return m.l + (t - Y0) * slot; }
+  function XC(year) { return XT(year + 0.5); }
+  function Y(v) { return m.t + (1 - (v - YMIN) / (YMAX - YMIN)) * (H - m.t - m.b); }
+  function pct(v) { return (v * 100).toFixed(0) + "%"; }
+
+  // Naming eras: 2017 names from 24 Apr 2017, 2023 names from 25 Aug 2023.
+  var E1 = 2017 + 113 / 365, E2 = 2023 + 236 / 365, END = Y0 + YEARS.length;
+  var s = "";
+  s += '<rect class="era" x="' + XT(Y0) + '" y="' + m.t + '" width="' + (XT(E1) - XT(Y0)) + '" height="' + (H - m.t - m.b) + '"/>';
+  s += '<rect class="era" x="' + XT(E2) + '" y="' + m.t + '" width="' + (XT(END) - XT(E2)) + '" height="' + (H - m.t - m.b) + '"/>';
+  [E1, E2].forEach(function (e) { s += '<line class="era-edge" x1="' + XT(e) + '" x2="' + XT(e) + '" y1="' + (m.t - 14) + '" y2="' + (H - m.b) + '"/>'; });
+  [[Y0, E1, "2015 NAMES"], [E1, E2, "2017 NAMES"], [E2, END, "2023 NAMES"]].forEach(function (e) {
+    s += '<text class="era-label" x="' + (XT(e[0]) + 6) + '" y="' + (m.t - 8) + '">' + e[2] + '</text>';
+  });
+  for (var v = 0.3; v <= 1.0001; v += 0.1) {
+    s += '<line class="gridline" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(v) + '" y2="' + Y(v) + '"/>';
+    s += '<text class="tick" x="' + (m.l - 8) + '" y="' + (Y(v) + 4) + '" text-anchor="end">' + Math.round(v * 100) + '%</text>';
+  }
+  s += '<line class="axis" x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + Y(YMIN) + '" y2="' + Y(YMIN) + '"/>';
+  YEARS.forEach(function (r, i) {
+    s += '<rect class="hover-col" id="hc' + i + '" x="' + XT(r[0]) + '" y="' + m.t + '" width="' + slot + '" height="' + (H - m.t - m.b) + '"/>';
+    s += '<text class="tick" x="' + XC(r[0]) + '" y="' + (H - m.b + 18) + '" text-anchor="middle">’' + String(r[0]).slice(2) + '</text>';
+    s += '<text class="tick" x="' + XC(r[0]) + '" y="' + (H - m.b + 34) + '" text-anchor="middle" style="opacity:.75">' + r[1] + '</text>';
+  });
+  s += '<text class="axis-title" x="' + (m.l - 8) + '" y="' + (H - m.b + 34) + '" text-anchor="end">n</text>';
+  s += '<text class="axis-title" x="' + (m.l + (W - m.l - m.r) / 2) + '" y="' + (H - 4) + '" text-anchor="middle">Year the complaint was filed</text>';
+  s += '<text class="axis-title" transform="translate(14 ' + (m.t + (H - m.t - m.b) / 2) + ') rotate(-90)" text-anchor="middle">Precision</text>';
+
+  SERIES.forEach(function (se) {
+    s += '<path class="ln ' + se.cls + '" d="' + YEARS.map(function (r, i) {
+      return (i ? "L" : "M") + (XC(r[0]) + se.dx).toFixed(1) + " " + Y(r[se.k][0]).toFixed(1);
+    }).join(" ") + '"/>';
+  });
+  SERIES.forEach(function (se) {
+    YEARS.forEach(function (r) {
+      var x = XC(r[0]) + se.dx, p = r[se.k];
+      s += '<line class="wh ' + se.cls + '" x1="' + x + '" x2="' + x + '" y1="' + Y(p[1]) + '" y2="' + Y(p[2]) + '"/>';
+      s += '<circle class="yd ' + se.cls + '" cx="' + x + '" cy="' + Y(p[0]) + '" r="4.5"/>';
+    });
+  });
+
+  // Direct labels at the right edge, nudged apart.
+  var last = YEARS[YEARS.length - 1];
+  var labels = SERIES.map(function (se) { return { se: se, y: Y(last[se.k][0]), v: last[se.k][0] }; })
+    .sort(function (a, b) { return a.y - b.y; });
+  for (var j = 1; j < labels.length; j++) labels[j].y = Math.max(labels[j].y, labels[j - 1].y + 15);
+  labels.forEach(function (l) {
+    s += '<text class="pt-label" x="' + (XC(last[0]) + 18) + '" y="' + (l.y + 4) + '">' + l.se.name + ' ' + pct(l.v) + '</text>';
+  });
+
+  YEARS.forEach(function (r, i) {
+    s += '<rect class="hit" data-i="' + i + '" tabindex="0" aria-label="' + r[0] + ': Sol ' + pct(r[4][0]) + ', router ' + pct(r[5][0]) + ', Laya ' + pct(r[3][0]) + ', ' + r[1] + ' complaints" x="' + XT(r[0]) + '" y="' + m.t + '" width="' + slot + '" height="' + (H - m.t - m.b) + '"/>';
+  });
+  var svg = document.getElementById("yrchart");
+  svg.innerHTML = s;
+
+  var wrap = document.getElementById("yrWrap"), tip = document.getElementById("yrTip"), on = null;
+  function show(i, target) {
+    var r = YEARS[i];
+    if (on !== null) document.getElementById("hc" + on).classList.remove("on");
+    document.getElementById("hc" + i).classList.add("on"); on = i;
+    tip.innerHTML = '<b>' + r[0] + '</b> <span class="muted">· ' + r[1] + ' complaints</span>' +
+      SERIES.slice().reverse().map(function (se) {
+        var p = r[se.k];
+        return '<div class="r"><span class="swatch ' + se.cls + '"></span><span>' + se.name + ' ' + pct(p[0]) + '</span><span class="ci">' + pct(p[1]) + '–' + pct(p[2]) + '</span></div>';
+      }).join("") + '<div class="foot">' + pct(r[2]) + ' sent to Sol</div>';
+    tip.style.display = "block";
+    var wb = wrap.getBoundingClientRect(), hb = target.getBoundingClientRect();
+    var x = hb.left - wb.left + hb.width + 8;
+    if (x + tip.offsetWidth > wb.width) x = hb.left - wb.left - tip.offsetWidth - 8;
+    tip.style.transform = "translate(" + Math.max(0, x) + "px," + 8 + "px)";
+  }
+  function hide() {
+    tip.style.display = "none";
+    if (on !== null) document.getElementById("hc" + on).classList.remove("on");
+    on = null;
+  }
+  svg.querySelectorAll(".hit").forEach(function (el) {
+    var i = +el.getAttribute("data-i");
+    el.addEventListener("mouseenter", function () { show(i, el); });
+    el.addEventListener("focus", function () { show(i, el); });
+    el.addEventListener("mouseleave", hide);
+    el.addEventListener("blur", hide);
+  });
+
+  document.getElementById("yrTable").innerHTML = YEARS.map(function (r) {
+    var c = function (p) { return '<td class="n">' + pct(p[0]) + ' <span class="muted">(' + pct(p[1]) + '–' + pct(p[2]) + ')</span></td>'; };
+    return '<tr><td>' + r[0] + '</td><td class="n">' + r[1].toLocaleString("en-US") + '</td>' + c(r[3]) + c(r[5]) + c(r[4]) + '<td class="n">' + pct(r[2]) + '</td></tr>';
+  }).join("");
+})();
+</script>
+
+</body></html>

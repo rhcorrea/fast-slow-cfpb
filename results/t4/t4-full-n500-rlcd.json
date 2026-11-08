@@ -1,0 +1,1 @@
+{"model": "t4-full-n500-rlcd", "train": "train_n500.jsonl", "epochs": 4, "grad_accum": 8, "loss": "rlcd", "train_min": 44.7, "test_s_per_item": 0.0418, "test_acc": 0.736, "test_ece": 0.11438144999999998, "val_s_per_item": 0.0415, "val_acc": 0.721, "val_ece": 0.09885489999999997}
