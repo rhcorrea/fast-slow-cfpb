@@ -178,4 +178,4 @@ On a free Colab T4 (every layer), open [`colab/laya_t4.ipynb`](colab/laya_t4.ipy
 
 ## Data and license
 
-Complaint data comes from the [CFPB Consumer Complaint Database Narratives Archive](https://www.consumerfinance.gov/foia-requests/foia-electronic-reading-room/cfpb-consumer-complaint-database-narratives-archive/) (public domain). It is not redistributed here; the pipeline above rebuilds it. Model weights (Laya, Qwen) are downloaded from Hugging Face under their own licenses.
+The code is released under the [MIT License](LICENSE). Complaint data comes from the [CFPB Consumer Complaint Database Narratives Archive](https://www.consumerfinance.gov/foia-requests/foia-electronic-reading-room/cfpb-consumer-complaint-database-narratives-archive/) (public domain). It is not redistributed here; the pipeline above rebuilds it. Model weights (Laya, Qwen) are downloaded from Hugging Face under their own licenses.
